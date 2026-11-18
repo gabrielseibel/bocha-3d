@@ -28,6 +28,7 @@ export class Screens {
   private readonly cb: ScreenCallbacks;
   private stack: ScreenId[] = [];
   private confirmAction: (() => void) | null = null;
+  private confirmCancel: (() => void) | null = null;
   private confetti: Confetti | null = null;
 
   constructor(settings: Settings, cb: ScreenCallbacks) {
@@ -52,6 +53,7 @@ export class Screens {
     on('btn-confirm-yes', () => {
       const a = this.confirmAction;
       this.confirmAction = null;
+      this.confirmCancel = null;
       this.close('confirm');
       a?.();
     });
@@ -98,6 +100,13 @@ export class Screens {
   close(id: ScreenId): void {
     byId(`screen-${id}`).hidden = true;
     this.stack = this.stack.filter((s) => s !== id);
+    if (id === 'confirm' && this.confirmCancel) {
+      // fechado sem confirmar (Cancelar, Esc)
+      const c = this.confirmCancel;
+      this.confirmCancel = null;
+      this.confirmAction = null;
+      c();
+    }
     if (id === 'victory') {
       this.confetti?.stop();
       this.confetti = null;
@@ -108,11 +117,12 @@ export class Screens {
     for (const id of [...this.stack]) this.close(id);
   }
 
-  confirm(title: string, sub: string, yes: string, action: () => void): void {
+  confirm(title: string, sub: string, yes: string, action: () => void, onCancel?: () => void): void {
     byId('confirm-text').textContent = title;
     byId('confirm-sub').textContent = sub;
     byId('btn-confirm-yes').textContent = yes;
     this.confirmAction = action;
+    this.confirmCancel = onCancel ?? null;
     this.open('confirm');
   }
 

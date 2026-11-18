@@ -349,12 +349,19 @@ export class Game {
       return;
     }
     this.state = 'paused';
-    this.screens.confirm('Reiniciar a partida?', 'O placar volta a zero.', 'REINICIAR', () => this.startMatch(this.lastMode));
-    const restore = () => {
-      if (this.state === 'paused' && !this.screens.isOpen('pause') && !this.screens.isOpen('confirm')) this.state = 'play';
-      else if (this.screens.isOpen('confirm')) window.setTimeout(restore, 120);
-    };
-    window.setTimeout(restore, 120);
+    this.screens.confirm(
+      'Reiniciar a partida?',
+      'O placar volta a zero.',
+      'REINICIAR',
+      () => this.startMatch(this.lastMode),
+      () => {
+        // cancelou: volta ao jogo (se não estava no menu de pausa)
+        if (this.state === 'paused' && !this.screens.isOpen('pause')) {
+          this.state = 'play';
+          this.lastTime = performance.now();
+        }
+      },
+    );
   }
 
   private toggleFullscreen(): void {
