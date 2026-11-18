@@ -1,0 +1,26 @@
+{
+  "name": "bocha-3d",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Bocha 3D — simulador de bocha para navegador: lançamentos em parábola, física de colisão própria, pontuação automática, IA e controles para PC e celular.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "calibrate": "vitest run --config tools/vitest.calibrate.config.ts"
+  },
+  "dependencies": {
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/three": "^0.187.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^4.0.0"
+  }
+}

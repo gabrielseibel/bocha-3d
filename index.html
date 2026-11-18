@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0e1822" />
+    <meta name="description" content="Bocha 3D: simulador de bocha no navegador. Lançamentos pelo alto em parábola, tiros, física real de colisão, IA com 3 níveis e pontuação automática. Jogue no PC ou no celular, sem instalar nada." />
+    <meta property="og:title" content="Bocha 3D — Simulador de cancha" />
+    <meta property="og:description" content="Ponto, tiro e bochada numa cancha de saibro 3D. Jogue contra o computador ou com um amigo, no PC ou no celular." />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <title>Bocha 3D — Simulador de cancha</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="gl" aria-label="Cancha de bocha em 3D"></canvas>
+      <div id="labels" class="labels" aria-hidden="true"></div>
+      <div id="pip" class="pip" hidden><span class="pip-tag">BOLIM</span></div>
+
+      <!-- ===================== HUD ===================== -->
+      <div id="hud" class="hud" hidden>
+        <div class="hud-buttons">
+          <button class="icon-btn" id="btn-pause" title="Menu (Esc)" aria-label="Pausar e abrir o menu">
+            <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          </button>
+          <button class="icon-btn" id="btn-camera" title="Trocar câmera (C)" aria-label="Trocar câmera">
+            <svg viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="10" rx="2" /><path d="M16 11l5-3v8l-5-3" /></svg>
+          </button>
+          <button class="icon-btn" id="btn-dist" title="Distâncias até o bolim (V)" aria-label="Mostrar distâncias até o bolim" aria-pressed="false">
+            <svg viewBox="0 0 24 24"><path d="M3 15l12-12 6 6-12 12z" /><path d="M7 11l2 2M10 8l2 2M13 5l2 2" /></svg>
+          </button>
+          <button class="icon-btn" id="btn-restart" title="Reiniciar" aria-label="Reiniciar a partida">
+            <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7" /><path d="M4 4v4h4" /></svg>
+          </button>
+          <button class="icon-btn" id="btn-fullscreen" title="Tela cheia" aria-label="Tela cheia" hidden>
+            <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
+          </button>
+        </div>
+
+        <div class="scoreboard" id="scoreboard">
+          <div class="sb-team blue">
+            <span class="sb-name">AZUL</span>
+            <span class="sb-balls" id="sb-balls-blue"></span>
+          </div>
+          <div class="sb-score"><span id="sb-blue">0</span><span class="sb-sep">×</span><span id="sb-red">0</span></div>
+          <div class="sb-team red">
+            <span class="sb-name">VERMELHO</span>
+            <span class="sb-balls" id="sb-balls-red"></span>
+          </div>
+          <div class="sb-meta" id="sb-meta">RODADA 1 · ATÉ 12</div>
+        </div>
+
+        <div class="training-board" id="training-board" hidden>
+          <span class="tb-title">TREINAMENTO</span>
+          <span>Bolas <b id="tb-count">0</b></span>
+          <span>Última <b id="tb-last">—</b></span>
+          <span>Melhor <b id="tb-best">—</b></span>
+        </div>
+
+        <div class="turn" id="turn"><span class="turn-dot"></span><span id="turn-text">VEZ DO AZUL</span></div>
+        <div class="point-info" id="point-info"></div>
+
+        <div class="controls" id="controls">
+          <div class="ctl-left">
+            <div class="ctl-row">
+              <span class="ctl-label">Força</span>
+              <div class="meter" id="power-meter" role="slider" tabindex="0" aria-label="Força do arremesso" aria-valuemin="0" aria-valuemax="100">
+                <div class="meter-fill"></div>
+                <div class="meter-cap" title="Limite do telhado para esta altura"></div>
+              </div>
+              <span class="ctl-value" id="power-value">55%</span>
+            </div>
+            <div class="ctl-row">
+              <span class="ctl-label">Direção</span>
+              <button class="mini" id="yaw-left" aria-label="Mirar mais à esquerda">◀</button>
+              <span class="ctl-value wide" id="yaw-value">0,0°</span>
+              <button class="mini" id="yaw-right" aria-label="Mirar mais à direita">▶</button>
+              <button class="mini" id="power-minus" aria-label="Diminuir a força">−</button>
+              <button class="mini" id="power-plus" aria-label="Aumentar a força">+</button>
+            </div>
+            <div class="ctl-row">
+              <span class="ctl-label">Posição</span>
+              <button class="mini" id="pos-left" aria-label="Arremessar mais à esquerda">◀</button>
+              <div class="pos-track" aria-hidden="true"><div class="pos-dot" id="pos-dot"></div></div>
+              <button class="mini" id="pos-right" aria-label="Arremessar mais à direita">▶</button>
+            </div>
+          </div>
+          <div class="ctl-right">
+            <div class="arc-ctl">
+              <span class="ctl-label">Altura</span>
+              <svg class="arc-icon" id="arc-icon" viewBox="0 0 40 24" aria-hidden="true"><path id="arc-path" d="M2 22 Q 20 0 38 22" /></svg>
+              <div class="vslider" id="arc-slider" role="slider" tabindex="0" aria-label="Altura da parábola" aria-orientation="vertical">
+                <div class="vslider-fill"></div>
+                <div class="vslider-thumb"></div>
+              </div>
+              <span class="ctl-value" id="arc-value">40°</span>
+            </div>
+            <button class="throw-btn" id="btn-throw" aria-label="Lançar">
+              <span class="throw-ball"></span>
+              <span>LANÇAR</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="hint" id="hint">Arraste para <b>baixo</b> para dar força e para os <b>lados</b> para mirar · solte para lançar</div>
+
+        <div class="training-actions" id="training-actions" hidden>
+          <button class="chip" id="tr-collect">Recolher bolas</button>
+          <button class="chip" id="tr-bolim">Novo bolim</button>
+          <button class="chip" id="tr-throw-bolim">Lançar o bolim</button>
+          <button class="chip" id="tr-rival">Bola adversária</button>
+        </div>
+      </div>
+
+      <div id="toasts" class="toasts" aria-live="polite"></div>
+
+      <!-- ===================== TELAS ===================== -->
+      <section id="screen-loading" class="screen loading">
+        <div class="brand small">
+          <div class="logo" aria-hidden="true"></div>
+          <h1>BOCHA <span>3D</span></h1>
+        </div>
+        <p class="loading-text">Preparando a cancha…</p>
+      </section>
+
+      <section id="screen-menu" class="screen menu" hidden>
+        <div class="menu-wrap">
+          <header class="brand">
+            <div class="logo" aria-hidden="true"></div>
+            <h1>BOCHA <span>3D</span></h1>
+            <p class="tagline">Simulador de cancha · ponto, tiro e bochada</p>
+          </header>
+          <div class="menu-panel">
+            <div class="field">
+              <div class="field-label">Modo de jogo</div>
+              <div class="seg" data-setting="mode">
+                <button data-value="cpu">Contra o computador</button>
+                <button data-value="pvp">Dois jogadores</button>
+              </div>
+            </div>
+            <div class="field" data-show-if="mode=cpu">
+              <div class="field-label">Dificuldade</div>
+              <div class="seg" data-setting="difficulty">
+                <button data-value="easy">Fácil</button>
+                <button data-value="medium">Médio</button>
+                <button data-value="hard">Difícil</button>
+              </div>
+            </div>
+            <div class="field">
+              <div class="field-label">Pontos para vencer</div>
+              <div class="seg seg-num" data-setting="target">
+                <button data-value="6">6</button>
+                <button data-value="9">9</button>
+                <button data-value="12">12</button>
+                <button data-value="15">15</button>
+                <button data-value="18">18</button>
+                <button data-value="21">21</button>
+              </div>
+            </div>
+            <div class="field">
+              <div class="field-label">Quem começa</div>
+              <div class="seg" data-setting="starter">
+                <button data-value="random">Sorteio</button>
+                <button data-value="blue">Azul</button>
+                <button data-value="red">Vermelho</button>
+              </div>
+            </div>
+            <button class="btn primary big" id="btn-play">JOGAR</button>
+            <div class="menu-row">
+              <button class="btn" id="btn-training">TREINAMENTO</button>
+              <button class="btn" id="btn-settings">CONFIGURAÇÕES</button>
+              <button class="btn" id="btn-help">COMO JOGAR</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-settings" class="screen sheet" hidden>
+        <div class="panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+          <header class="panel-head">
+            <h2 id="settings-title">Configurações</h2>
+            <button class="icon-btn" data-close aria-label="Fechar">
+              <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </header>
+          <div class="panel-body">
+            <h3>Som</h3>
+            <div class="field inline">
+              <label for="set-volume" class="field-label">Volume</label>
+              <input type="range" id="set-volume" min="0" max="100" step="1" />
+              <span class="mute-label" aria-hidden="true">Mudo</span>
+              <button class="switch" role="switch" data-setting="muted" aria-label="Sem som"></button>
+            </div>
+            <h3>Jogo</h3>
+            <div class="field">
+              <div class="field-label">Guia da trajetória</div>
+              <div class="seg" data-setting="guide">
+                <button data-value="off">Desligado</button>
+                <button data-value="short">Curto</button>
+                <button data-value="full">Completo</button>
+              </div>
+            </div>
+            <div class="field">
+              <div class="field-label">Bolim</div>
+              <div class="seg" data-setting="bolimMode">
+                <button data-value="throw">Lançado pela equipe</button>
+                <button data-value="auto">Posicionado automaticamente</button>
+              </div>
+            </div>
+            <div class="field toggle-row"><span>Bola que bate no fundo sem tocar outra é anulada</span><button class="switch" role="switch" data-setting="backWallRule" aria-label="Regra do fundo"></button></div>
+            <div class="field toggle-row"><span>Soltar o arraste já lança a bola</span><button class="switch" role="switch" data-setting="releaseToThrow" aria-label="Lançar ao soltar"></button></div>
+            <div class="field toggle-row"><span>Câmera lenta nos tiros pelo ar</span><button class="switch" role="switch" data-setting="slowMo" aria-label="Câmera lenta"></button></div>
+            <div class="field toggle-row"><span>Mostrar distâncias o tempo todo</span><button class="switch" role="switch" data-setting="alwaysDistances" aria-label="Distâncias sempre"></button></div>
+            <h3>Câmera e imagem</h3>
+            <div class="field toggle-row"><span>Janela com a câmera do bolim</span><button class="switch" role="switch" data-setting="pip" aria-label="Janela do bolim"></button></div>
+            <div class="field toggle-row"><span>Mostrar o jogador arremessando</span><button class="switch" role="switch" data-setting="thrower" aria-label="Mostrar jogador"></button></div>
+            <div class="field">
+              <div class="field-label">Qualidade gráfica</div>
+              <div class="seg" data-setting="quality">
+                <button data-value="auto">Automática</button>
+                <button data-value="high">Alta</button>
+                <button data-value="medium">Média</button>
+                <button data-value="low">Baixa</button>
+              </div>
+            </div>
+            <h3>Cancha <small>(vale a partir da próxima partida)</small></h3>
+            <div class="field">
+              <div class="field-label">Comprimento</div>
+              <div class="seg" data-setting="courtLength">
+                <button data-value="20">20 m</button>
+                <button data-value="24">24 m</button>
+                <button data-value="27">27 m</button>
+              </div>
+            </div>
+            <div class="field">
+              <div class="field-label">Largura</div>
+              <div class="seg" data-setting="courtWidth">
+                <button data-value="3">3,0 m</button>
+                <button data-value="3.6">3,6 m</button>
+                <button data-value="4.2">4,2 m</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-help" class="screen sheet" hidden>
+        <div class="panel" role="dialog" aria-modal="true" aria-labelledby="help-title">
+          <header class="panel-head">
+            <h2 id="help-title">Como jogar</h2>
+            <button class="icon-btn" data-close aria-label="Fechar">
+              <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </header>
+          <div class="panel-body prose">
+            <h3>Objetivo</h3>
+            <p>Deixar suas bolas mais perto do <b>bolim</b> (a bolinha branca) do que as do adversário. Cada equipe tem <b>4 bolas</b> por rodada.</p>
+            <h3>A rodada</h3>
+            <ol>
+              <li>Uma equipe lança o bolim. Ele precisa parar entre as duas linhas tracejadas; se não parar, a outra equipe tenta e, depois, o árbitro posiciona.</li>
+              <li>Quem lançou o bolim joga a primeira bola; depois a outra equipe.</li>
+              <li>Joga sempre a equipe que <b>não</b> tem a bola mais próxima, até acabarem suas bolas.</li>
+              <li>No fim, a equipe com a bola mais próxima marca <b>1 ponto por bola</b> que estiver mais perto que a melhor bola adversária.</li>
+              <li>Vence quem chegar primeiro aos pontos combinados (12 por padrão).</li>
+            </ol>
+            <p>Bola que bate na tabela do fundo sem ter tocado outra bola é <b>anulada</b> (dá para desligar nas configurações).</p>
+            <h3>Arremesso</h3>
+            <ul>
+              <li><b>Altura</b>: bola alta cai e para quase onde caiu (ponto); bola baixa rola bastante.</li>
+              <li><b>Força</b>: quanto mais força, mais longe. A marca na barra mostra o limite do telhado para a altura escolhida.</li>
+              <li><b>Direção</b> e <b>posição</b>: mire e escolha de que ponto da cabeceira arremessar.</li>
+              <li><b>Tiro</b>: bola mais baixa e forte direto na bola adversária para tirá-la do lugar — pode acertar pelo ar.</li>
+            </ul>
+            <h3>Controles</h3>
+            <div class="controls-help">
+              <div>
+                <h4>Mouse / toque</h4>
+                <p>Arraste para <b>baixo</b> para dar força e para os <b>lados</b> para mirar. Solte para lançar. Use a barra <b>Altura</b> à direita e os botões ◀ ▶ para o ajuste fino, ou ajuste tudo e toque em <b>LANÇAR</b>.</p>
+                <p>Na câmera do bolim ou na visão geral, arrastar gira a câmera e a roda / pinça aproxima.</p>
+              </div>
+              <div>
+                <h4>Teclado</h4>
+                <p><kbd>←</kbd><kbd>→</kbd> direção · <kbd>↑</kbd><kbd>↓</kbd> altura · <kbd>W</kbd><kbd>S</kbd> força · <kbd>A</kbd><kbd>D</kbd> posição · <kbd>Shift</kbd> ajuste fino · <kbd>Espaço</kbd> / <kbd>Enter</kbd> lançar · <kbd>C</kbd> câmera · <kbd>V</kbd> distâncias · <kbd>Esc</kbd> menu</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-pause" class="screen dim" hidden>
+        <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+          <h2 id="pause-title">Pausa</h2>
+          <button class="btn primary" id="btn-resume">CONTINUAR</button>
+          <button class="btn" id="btn-pause-restart">REINICIAR PARTIDA</button>
+          <button class="btn" id="btn-pause-settings">CONFIGURAÇÕES</button>
+          <button class="btn" id="btn-pause-help">COMO JOGAR</button>
+          <button class="btn ghost" id="btn-pause-menu">SAIR PARA O MENU</button>
+        </div>
+      </section>
+
+      <section id="screen-confirm" class="screen dim" hidden>
+        <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-text">
+          <h2 id="confirm-text">Reiniciar a partida?</h2>
+          <p id="confirm-sub" class="muted">O placar volta a zero.</p>
+          <div class="dialog-row">
+            <button class="btn ghost" id="btn-confirm-no">CANCELAR</button>
+            <button class="btn primary" id="btn-confirm-yes">REINICIAR</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-round" class="screen side" hidden>
+        <div class="round-card" role="dialog" aria-modal="false" aria-labelledby="round-title">
+          <div class="round-head" id="round-head">FIM DA RODADA 1</div>
+          <div class="round-title" id="round-title">AZUL MARCA 2 PONTOS</div>
+          <ol class="round-list" id="round-list"></ol>
+          <div class="round-score">
+            <span class="rs blue"><small>AZUL</small><b id="round-blue">0</b></span>
+            <span class="rs-sep">×</span>
+            <span class="rs red"><b id="round-red">0</b><small>VERMELHO</small></span>
+          </div>
+          <button class="btn primary" id="btn-round-continue">CONTINUAR</button>
+        </div>
+      </section>
+
+      <section id="screen-victory" class="screen victory" hidden>
+        <canvas id="confetti" aria-hidden="true"></canvas>
+        <div class="victory-card">
+          <div class="trophy" aria-hidden="true">🏆</div>
+          <h2 id="victory-title">VITÓRIA DO AZUL!</h2>
+          <div class="final-score"><span class="b" id="final-blue">12</span><span class="sep">×</span><span class="r" id="final-red">7</span></div>
+          <p class="muted" id="victory-sub">Partida até 12 pontos</p>
+          <div class="dialog-row">
+            <button class="btn primary" id="btn-again">JOGAR NOVAMENTE</button>
+            <button class="btn" id="btn-victory-menu">MENU</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="rotate-hint" class="rotate-hint" hidden>
+        <span>Gire o celular para jogar na horizontal — a cancha fica bem maior.</span>
+        <button class="chip" id="rotate-ok">OK</button>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
