@@ -31,7 +31,7 @@ export class CameraRig {
   private shake = 0;
   /** órbita controlada pelo usuário nos modos bolim/visão geral */
   readonly orbit = { yaw: 0, pitch: 0.9, dist: 2.8 };
-  private readonly overviewOrbit = { yaw: 0.35, pitch: 0.62, dist: 1 };
+  private readonly overviewOrbit = { yaw: 0, pitch: 0.3, dist: 1 };
   private readonly pipLook = new THREE.Vector3();
   private readonly pipPos = new THREE.Vector3();
   private aspect = 1.6;
@@ -46,7 +46,7 @@ export class CameraRig {
   setMode(mode: CamMode, followId: number | null = null, snap = false): void {
     if (mode !== this.mode) {
       if (mode === 'bolim') Object.assign(this.orbit, { yaw: 0, pitch: 0.92, dist: 2.8 });
-      if (mode === 'overview') Object.assign(this.overviewOrbit, { yaw: 0.35, pitch: 0.62, dist: 1 });
+      if (mode === 'overview') Object.assign(this.overviewOrbit, { yaw: 0, pitch: 0.3, dist: 1 });
     }
     this.mode = mode;
     this.followId = followId;
@@ -61,7 +61,7 @@ export class CameraRig {
   orbitBy(dx: number, dy: number): void {
     const o = this.mode === 'overview' ? this.overviewOrbit : this.orbit;
     o.yaw -= dx * 0.006;
-    o.pitch = clamp(o.pitch + dy * 0.005, 0.18, 1.45);
+    o.pitch = this.mode === 'overview' ? clamp(o.pitch + dy * 0.004, 0.1, 0.55) : clamp(o.pitch + dy * 0.005, 0.18, 1.45);
   }
 
   zoomBy(f: number): void {
@@ -188,9 +188,10 @@ export class CameraRig {
         break;
       }
       case 'overview': {
+        // visão geral alta, por baixo da cobertura, mostrando a cancha inteira
         const o = this.overviewOrbit;
-        const cz = -L * 0.52;
-        const d = L * 0.95 * o.dist;
+        const cz = -L * 0.55;
+        const d = L * 0.62 * o.dist;
         this.tLook.set(0, 0, cz);
         this.tPos.set(Math.sin(o.yaw) * Math.cos(o.pitch) * d, 0.5 + Math.sin(o.pitch) * d, cz + Math.cos(o.yaw) * Math.cos(o.pitch) * d);
         this.tFov = this.fitFov(40, 42);
@@ -199,7 +200,7 @@ export class CameraRig {
       }
     }
     // a câmera nunca entra no piso nem sobe no telhado
-    this.tPos.y = clamp(this.tPos.y, 0.25, this.mode === 'overview' || this.mode === 'menu' ? 40 : court.ceiling - 0.3);
+    this.tPos.y = clamp(this.tPos.y, 0.25, this.mode === 'menu' ? 40 : court.ceiling - 0.3);
     if (this.snapNext) {
       this.pos.copy(this.tPos);
       this.look.copy(this.tLook);
