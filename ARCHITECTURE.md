@@ -48,9 +48,12 @@ própria (não uma animação), roda igual no jogo, nos testes e na IA.
 Coordenadas: `x` lateral, `y` para cima, a cancha se estende de `z = 0` (cabeceira de
 arremesso) até `z = -comprimento` (fundo).
 
-1. **Lançamento** — a força é mapeada em velocidade por `v² = v_min² + (v_max² − v_min²)·força`,
-   então a distância cresce de forma quase linear com a força. A altura é o ângulo de saída
-   (8° a 62°). A bola sai do ponto da mão do jogador (0,42 a 0,72 m de altura).
+1. **Lançamento** — dois estilos pelo ângulo de saída:
+   - **Ponto** (0° a 12°): jogador agachado, a bola sai a ~7,5 cm do chão já girando como se
+     rolasse (sem deslizar) e rola até parar. Velocidade máxima calibrada para a bola passar
+     ~1,5 m do fundo com força total.
+   - **Tiro** (16° a 50°): corrida curta, soltura a 0,8–1,1 m, voo alto e forte para bater.
+   Em ambos `v² = v_min² + (v_max² − v_min²)·força`, então a distância cresce quase linearmente.
 2. **Voo** — gravidade + arrasto do ar (quadrático). Parábola real; a sombra fica logo abaixo
    da bola (luz quase vertical), o que dá a leitura de altura.
 3. **Impacto no saibro** — restituição baixa que cai com a velocidade (o barro absorve),

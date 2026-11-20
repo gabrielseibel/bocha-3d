@@ -93,6 +93,7 @@ export class Screens {
     el.hidden = false;
     this.stack = this.stack.filter((s) => s !== id);
     this.stack.push(id);
+    this.layer();
     const focus = el.querySelector<HTMLElement>('.btn.primary, [data-close], button');
     window.setTimeout(() => focus?.focus({ preventScroll: true }), 30);
   }
@@ -100,6 +101,7 @@ export class Screens {
   close(id: ScreenId): void {
     byId(`screen-${id}`).hidden = true;
     this.stack = this.stack.filter((s) => s !== id);
+    this.layer();
     if (id === 'confirm' && this.confirmCancel) {
       // fechado sem confirmar (Cancelar, Esc)
       const c = this.confirmCancel;
@@ -111,6 +113,20 @@ export class Screens {
       this.confetti?.stop();
       this.confetti = null;
     }
+  }
+
+  /**
+   * A tela aberta por último fica sempre por cima; quando é um painel
+   * (configurações, ajuda, confirmação) a tela de baixo some para não competir.
+   */
+  private layer(): void {
+    const top = this.top;
+    const covering = top === 'settings' || top === 'help' || top === 'confirm';
+    this.stack.forEach((id, i) => {
+      const el = byId(`screen-${id}`);
+      el.style.zIndex = String(10 + i);
+      el.classList.toggle('covered', covering && i < this.stack.length - 1);
+    });
   }
 
   closeAll(): void {

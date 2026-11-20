@@ -10,17 +10,18 @@ test('tabela de calibração', () => {
   const court = DEFAULT_COURT;
   const rows: string[] = [];
   rows.push('arco  força  v(m/s)  ápice  queda(m)  parada(m)  rolou(m)  tempo(s)');
-  for (const arc of [10, 20, 30, 40, 50, 60]) {
-    for (const power of [0.3, 0.5, 0.7, 0.9]) {
+  for (const arc of [0, 4, 8, 12, 18, 26, 36, 50]) {
+    for (const power of [0.2, 0.4, 0.6, 0.8, 1]) {
       const aim = { x0: 0, yaw: 0, arc, power };
       const f = predictFlight(aim, court);
+      if (!f.landing) continue;
       const w = new World(court);
       const b = launchBody(w, 'ball', 'blue', aim);
       w.runUntilRest(40);
       const land = f.landing ? -f.landing.z : NaN;
       const stop = -b.pz;
       rows.push(
-        `${String(arc).padStart(4)}  ${power.toFixed(2)}  ${launchSpeed(power, court).toFixed(2).padStart(6)}  ${f.apex
+        `${String(arc).padStart(4)}  ${power.toFixed(2)}  ${launchSpeed(power, court, arc).toFixed(2).padStart(6)}  ${f.apex
           .toFixed(2)
           .padStart(5)}  ${land.toFixed(2).padStart(8)}  ${stop.toFixed(2).padStart(9)}  ${(stop - land)
           .toFixed(2)

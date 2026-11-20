@@ -18,7 +18,9 @@ export interface InputCallbacks {
   orbit(dx: number, dy: number): void;
   zoom(f: number): void;
   nudge(field: AimField, dir: 1 | -1, fine: boolean): void;
-  key(action: 'camera' | 'distances' | 'pause'): void;
+  key(action: 'camera' | 'distances' | 'pause' | 'style'): void;
+  /** segurar a tela/Espaço acelera a jogada em andamento */
+  fastForward(on: boolean): void;
 }
 
 /** Arrastar na tela: para baixo = força, para os lados = direção. Soltar = lançar. */
@@ -42,6 +44,9 @@ export class Input {
     el.addEventListener('wheel', this.onWheel, { passive: false });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('keydown', this.onKey);
+    window.addEventListener('keyup', (e) => {
+      if (e.key === ' ') this.cb.fastForward(false);
+    });
   }
 
   private dragScale(): { power: number; yaw: number } {
@@ -65,6 +70,7 @@ export class Input {
       return;
     }
     if (this.pointers.size > 2) return;
+    this.cb.fastForward(true);
     if (this.cb.canAim()) {
       this.el.setPointerCapture(e.pointerId);
       this.drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, aim0: { ...this.cb.getAim() }, moved: false };
@@ -107,6 +113,7 @@ export class Input {
 
   private onUp = (e: PointerEvent): void => {
     this.pointers.delete(e.pointerId);
+    if (this.pointers.size === 0) this.cb.fastForward(false);
     if (this.pointers.size < 2) this.pinchDist = 0;
     if (this.drag && e.pointerId === this.drag.id) {
       const d = this.drag;
@@ -133,6 +140,7 @@ export class Input {
 
   private onCancel = (e: PointerEvent): void => {
     this.pointers.delete(e.pointerId);
+    if (this.pointers.size === 0) this.cb.fastForward(false);
     if (this.drag && e.pointerId === this.drag.id) this.cancel();
     if (this.orbitPtr && e.pointerId === this.orbitPtr.id) this.orbitPtr = null;
   };
@@ -178,7 +186,14 @@ export class Input {
     }
     if (k === 'c') return this.cb.key('camera');
     if (k === 'v') return this.cb.key('distances');
-    if (!this.cb.canAim()) return;
+    if (k === 't') return this.cb.key('style');
+    if (!this.cb.canAim()) {
+      if (k === ' ') {
+        this.cb.fastForward(true);
+        e.preventDefault();
+      }
+      return;
+    }
     if (aimKeys[k]) {
       const [f, dir] = aimKeys[k];
       this.cb.nudge(f, dir, fine);

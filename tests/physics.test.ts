@@ -39,20 +39,31 @@ describe('lançamento', () => {
     expect(a.w.bodies.map((o) => [o.px, o.pz])).toEqual(b.w.bodies.map((o) => [o.px, o.pz]));
   });
 
-  it('mais força leva a bola mais longe', () => {
-    let last = -Infinity;
-    for (const power of [0.2, 0.35, 0.5, 0.65]) {
-      const { b } = throwOnce({ x0: 0, yaw: 0, arc: 45, power });
-      expect(-b.pz).toBeGreaterThan(last);
-      last = -b.pz;
+  it('mais força leva a bola mais longe (ponto e tiro)', () => {
+    for (const arc of [3, 40]) {
+      let last = -Infinity;
+      for (const power of [0.2, 0.35, 0.5, 0.65]) {
+        const { b } = throwOnce({ x0: 0, yaw: 0, arc, power });
+        expect(-b.pz).toBeGreaterThan(last);
+        last = -b.pz;
+      }
     }
+  });
+
+  it('ponto: bola sai rente ao chão e rola até perto do alvo', () => {
+    const f = predictFlight({ x0: 0, yaw: 0, arc: 3, power: 0.5 }, court);
+    expect(f.apex).toBeLessThan(0.15);
+    expect(-f.landing!.z).toBeLessThan(3);
+    const { b } = throwOnce({ x0: 0, yaw: 0, arc: 3, power: 0.5 });
+    expect(-b.pz).toBeGreaterThan(12);
+    expect(-b.pz).toBeLessThan(19);
   });
 
   it('arco maior faz uma parábola mais alta', () => {
     const low = predictFlight({ x0: 0, yaw: 0, arc: 20, power: 0.6 }, court);
     const high = predictFlight({ x0: 0, yaw: 0, arc: 50, power: 0.6 }, court);
     expect(high.apex).toBeGreaterThan(low.apex + 1.5);
-    expect(low.apex).toBeGreaterThan(0.6); // nunca é rasteira: sempre sai do chão
+    expect(low.apex).toBeGreaterThan(1); // tiro sempre vai pelo alto
   });
 
   it('bola alta rola menos depois de cair do que bola baixa', () => {
@@ -128,7 +139,7 @@ describe('colisões', () => {
   });
 
   it('a bola que bate no fundo sem tocar outra é anulada', () => {
-    const { b } = throwOnce({ x0: 0, yaw: 0, arc: 12, power: 0.75 });
+    const { b } = throwOnce({ x0: 0, yaw: 0, arc: 3, power: 1 });
     expect(b.dead).toBe(true);
     expect(b.deadReason).toBe('back');
   });
@@ -143,15 +154,15 @@ describe('colisões', () => {
   });
 });
 
-/** procura a força que faz a bola (arco 14°) acertar em cheio uma bola a `dist` metros */
+/** procura a força que faz a bola (arco 18°) acertar em cheio uma bola a `dist` metros */
 function findDirectHit(dist: number): Aim {
   let lo = 0;
   let hi = 1;
   for (let i = 0; i < 30; i++) {
     const mid = (lo + hi) / 2;
-    const f = predictFlight({ x0: 0, yaw: 0, arc: 14, power: mid }, court);
+    const f = predictFlight({ x0: 0, yaw: 0, arc: 18, power: mid }, court);
     if (-f.landing!.z < dist + 0.03) lo = mid;
     else hi = mid;
   }
-  return { x0: 0, yaw: 0, arc: 14, power: (lo + hi) / 2 };
+  return { x0: 0, yaw: 0, arc: 18, power: (lo + hi) / 2 };
 }

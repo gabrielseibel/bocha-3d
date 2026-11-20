@@ -45,7 +45,7 @@ export class Match {
   lastResult: RoundResult | null = null;
   winner: Team | null = null;
   aims: Record<Team, Aim> = { blue: defaultAim(), red: defaultAim() };
-  bolimAim: Aim = { x0: 0, yaw: 0, arc: 42, power: 0.5 };
+  bolimAim: Aim = { x0: 0, yaw: 0, arc: 3, power: 0.55 };
   /** estatísticas do treino */
   training = { thrown: 0, last: null as number | null, best: null as number | null };
   private throwCounter = 0;

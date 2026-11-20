@@ -518,6 +518,58 @@ svg {
   gap: 10px;
 }
 
+.style-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px;
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.style-toggle button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 76px;
+  padding: 6px 4px 5px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  line-height: 1;
+}
+
+.style-toggle b {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+}
+
+.style-toggle small {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.style-toggle button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #2a1503;
+  border-color: transparent;
+}
+
+.style-toggle button[aria-pressed='true'] small {
+  color: #6a3a0c;
+}
+
+.controls.tiro .style-toggle button[aria-pressed='true'] {
+  background: #ff6a4d;
+}
+
+.controls.tiro .vslider-fill {
+  background: linear-gradient(0deg, rgba(255, 106, 77, 0.25), rgba(255, 106, 77, 0.9));
+}
+
 .arc-ctl {
   display: flex;
   flex-direction: column;
@@ -792,6 +844,10 @@ svg {
   z-index: 10;
 }
 
+.screen.covered {
+  visibility: hidden;
+}
+
 .screen.dim {
   background: rgba(5, 9, 14, 0.6);
 }
@@ -1002,7 +1058,7 @@ svg {
 
 /* painéis (configurações, ajuda) */
 .sheet {
-  background: rgba(5, 9, 14, 0.55);
+  background: rgba(5, 9, 14, 0.72);
 }
 
 .panel {
@@ -1522,6 +1578,16 @@ kbd {
   .controls .ctl-right {
     flex-direction: row;
     align-items: flex-end;
+  }
+  .style-toggle button {
+    width: 62px;
+    padding: 4px 3px;
+  }
+  .style-toggle b {
+    font-size: 13px;
+  }
+  .style-toggle small {
+    display: none;
   }
   .vslider {
     height: clamp(80px, 26vh, 130px);

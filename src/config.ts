@@ -98,8 +98,8 @@ export const DEFAULT_COURT = makeCourt();
 /** Limites da mira */
 export const AIM = {
   yawMax: 14, // graus para cada lado
-  arcMin: 8, // graus
-  arcMax: 62,
+  arcMin: 0, // graus (ponto rasteiro)
+  arcMax: 50, // tiro alto
   lateralMargin: 0.3, // distância mínima da tabela lateral (m)
   minSpeed: 2.2, // m/s com força 0
 };

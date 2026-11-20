@@ -31,7 +31,7 @@ export const DEFAULT_SETTINGS: Settings = {
   volume: 0.8,
   muted: false,
   quality: 'auto',
-  guide: 'short',
+  guide: 'full',
   pip: true,
   releaseToThrow: true,
   bolimMode: 'throw',
@@ -43,7 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   courtWidth: 3.6,
 };
 
-const KEY = 'bocha3d.settings.v1';
+const KEY = 'bocha3d.settings.v2';
 
 export function loadSettings(): Settings {
   try {

@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { AIM, BALL, BALLS_PER_TEAM, BOLIM, PHYS_DT, makeCourt, type CourtSpec } from '../config';
+import { BALL, BALLS_PER_TEAM, BOLIM, PHYS_DT, makeCourt, type CourtSpec } from '../config';
 import { AiClient } from '../ai/client';
 import type { Plan } from '../ai/planner';
 import { Sfx } from '../audio/sfx';
 import { World, type BodyKind, type Team } from '../physics/world';
-import { clampAim, defaultAim, limitAimToCourt, maxPowerForArc, releasePoint, type Aim } from '../physics/shot';
+import { STYLE_RANGE, clampAim, defaultAim, limitAimToCourt, maxPowerForArc, releasePoint, styleOf, withStyle, type Aim, type ShotStyle } from '../physics/shot';
 import { AimGuide } from '../render/aimGuide';
 import { BallViews } from '../render/balls';
 import { CameraRig, type CamMode } from '../render/cameraRig';
@@ -74,6 +74,8 @@ export class Game {
   private flightT = 0;
   private pendingThrow = false;
   private shotCalled = false;
+  /** jogador segurando a tela/Espaço para acelerar a jogada */
+  private fastForward = false;
   /** a vez atual já foi preparada (evita lançar antes da troca de vez) */
   private turnReady = false;
   private turnToken = 0;
@@ -114,6 +116,7 @@ export class Game {
       nudge: (f, d) => this.nudge(f, d, false),
       setFraction: (f, v) => this.setFraction(f, v),
       throwNow: () => this.humanThrow(),
+      style: (st) => this.setStyle(st),
       pause: () => this.pause(),
       camera: () => this.cycleView(),
       distances: () => this.toggleDistances(),
@@ -148,12 +151,14 @@ export class Game {
       orbit: (dx, dy) => this.rig.orbitBy(dx, dy),
       zoom: (f) => this.rig.zoomBy(f),
       nudge: (f, d, fine) => this.nudge(f, d, fine),
+      fastForward: (on) => (this.fastForward = on),
       key: (a) => {
         if (a === 'pause') {
           if (this.state === 'play') this.pause();
           else if (this.state === 'paused' && this.screens.top === 'pause') this.resume();
         } else if (this.state === 'play') {
           if (a === 'camera') this.cycleView();
+          else if (a === 'style') this.setStyle(styleOf(this.aim.arc) === 'ponto' ? 'tiro' : 'ponto');
           else this.toggleDistances();
         }
       },
@@ -442,7 +447,7 @@ export class Game {
     this.thrower.setVisible(this.settings.thrower);
     this.setHeldBall(isBolim ? 'bolim' : team);
     this.setAim(this.aim);
-    this.guide.setColor(team === 'blue' ? '#5aa2ff' : '#ff6b6b');
+    this.guide.setColor(isBolim ? '#ffe066' : team === 'blue' ? '#3d9bff' : '#ff4f45');
     this.balls.setHighlights([]);
     this.labelsForced = false;
     this.rig.setMode(this.userView === 'aim' ? 'aim' : this.userView, null, first);
@@ -504,7 +509,10 @@ export class Game {
     if (plan.intent === 'tiro') this.hud.toast(`${TEAM_NAME[team]} vai de tiro!`, team, 1500);
     else if (plan.intent === 'bolim') this.hud.toast(`${TEAM_NAME[team]} vai no bolim!`, team, 1500);
     else if (plan.intent === 'empurrar') this.hud.toast(`${TEAM_NAME[team]} vai empurrar`, team, 1300);
-    this.aiAnim = { from: { ...this.aim }, to: plan.aim, t: 0, dur: 0.9 };
+    // trocando de ponto para tiro (ou vice-versa) a altura muda direto, sem passar pela faixa intermediária
+    const from = { ...this.aim };
+    if (styleOf(from.arc) !== styleOf(plan.aim.arc)) from.arc = plan.aim.arc;
+    this.aiAnim = { from, to: plan.aim, t: 0, dur: 0.9 };
   }
 
   private humanThrow(): void {
@@ -525,7 +533,7 @@ export class Game {
     const kind = this.kind;
     const aim = limitAimToCourt(clampAim(this.aim, this.court), this.court, kind);
     this.aim = aim;
-    this.thrower.placeFor(releasePoint(aim, this.court));
+    this.thrower.placeFor(releasePoint(aim, this.court), styleOf(aim.arc));
     this.hud.setControlsEnabled(false);
     this.hud.setHint(null);
     this.guide.hide();
@@ -539,6 +547,7 @@ export class Game {
       this.restT = 0;
       this.settleDelay = -1;
       this.rig.setMode('follow', b.id);
+      this.hud.setHint('Segure na tela (ou <b>Espaço</b>) para acelerar a jogada');
       this.trail.clear();
       this.trail.setColor(kind === 'bolim' ? '#ffffff' : m.current === 'blue' ? '#9cc4ff' : '#ffb0a8');
       this.updateScoreboard(null);
@@ -553,7 +562,7 @@ export class Game {
     let x = clampAim(a, this.court);
     x = limitAimToCourt(x, this.court, this.kind);
     this.aim = x;
-    this.thrower.placeFor(releasePoint(x, this.court));
+    this.thrower.placeFor(releasePoint(x, this.court), styleOf(x.arc));
     this.hud.setAim(x, this.court, maxPowerForArc(x.arc, this.court), this.kind === 'bolim');
   }
 
@@ -577,10 +586,20 @@ export class Game {
     this.setAim(a);
   }
 
+  /** ponto (agachado, rasteiro) ou tiro (alto, para bater) */
+  private setStyle(style: ShotStyle): void {
+    if (!this.canHumanAim() || styleOf(this.aim.arc) === style) return;
+    this.setAim(withStyle(this.aim, style));
+    this.hud.toast(style === 'ponto' ? 'Ponto: agachado, bola rente ao chão' : 'Tiro: bola alta e forte para bater', 'info', 1300);
+  }
+
   private setFraction(field: 'power' | 'arc', v: number): void {
     if (!this.canHumanAim()) return;
     if (field === 'power') this.setAim({ ...this.aim, power: Math.round(v * 1000) / 1000 });
-    else this.setAim({ ...this.aim, arc: Math.round((AIM.arcMin + v * (AIM.arcMax - AIM.arcMin)) * 4) / 4 });
+    else {
+      const r = STYLE_RANGE[styleOf(this.aim.arc)];
+      this.setAim({ ...this.aim, arc: Math.round((r.min + v * (r.max - r.min)) * 4) / 4 });
+    }
   }
 
   // ======================================================================= câmera / UI
@@ -675,7 +694,7 @@ export class Game {
     if (this.match && this.state !== 'menu') {
       const m = this.match;
       const aiming = (m.phase === 'aim' || m.phase === 'bolim-aim') && !this.pendingThrow;
-      if (aiming) this.guide.update(this.aim, this.court, this.kind, this.settings.guide, dt);
+      if (aiming) this.guide.update(this.aim, this.court, this.kind, this.settings.guide, this.world.backWallRule, dt);
       else this.guide.hide();
       this.thrower.root.visible = this.thrower.root.visible && this.settings.thrower;
     }
@@ -751,7 +770,7 @@ export class Game {
         power: a.from.power + (a.to.power - a.from.power) * e,
       };
       this.aim = k >= 1 ? a.to : mid;
-      this.thrower.placeFor(releasePoint(this.aim, this.court));
+      this.thrower.placeFor(releasePoint(this.aim, this.court), styleOf(this.aim.arc));
       this.hud.setAim(this.aim, this.court, maxPowerForArc(this.aim.arc, this.court), this.kind === 'bolim');
       if (k >= 1) {
         this.aiAnim = null;
@@ -760,7 +779,8 @@ export class Game {
     }
     // física em passo fixo (com câmera lenta nos tiros)
     if (!this.world.atRest) {
-      this.physAcc += dt * this.timeScale;
+      const ff = this.fastForward && m.inFlight && this.slowMoT <= 0 ? 3 : 1;
+      this.physAcc += dt * this.timeScale * ff;
       let n = 0;
       while (this.physAcc >= PHYS_DT && n < 400) {
         this.world.step();

@@ -86,6 +86,10 @@
             </div>
           </div>
           <div class="ctl-right">
+            <div class="style-toggle" role="group" aria-label="Tipo de arremesso">
+              <button id="style-ponto" aria-pressed="true" title="Ponto: agachado, bola rente ao chão (T)"><b>PONTO</b><small>rasteiro</small></button>
+              <button id="style-tiro" aria-pressed="false" title="Tiro: bola alta e forte para bater (T)"><b>TIRO</b><small>pelo alto</small></button>
+            </div>
             <div class="arc-ctl">
               <span class="ctl-label">Altura</span>
               <svg class="arc-icon" id="arc-icon" viewBox="0 0 40 24" aria-hidden="true"><path id="arc-path" d="M2 22 Q 20 0 38 22" /></svg>
@@ -266,10 +270,11 @@
             <p>Bola que bate na tabela do fundo sem ter tocado outra bola é <b>anulada</b> (dá para desligar nas configurações).</p>
             <h3>Arremesso</h3>
             <ul>
-              <li><b>Altura</b>: bola alta cai e para quase onde caiu (ponto); bola baixa rola bastante.</li>
+              <li><b>Ponto</b> (padrão): o jogador se agacha e solta a bola <b>rente ao chão</b>, rolando até o bolim. A barra <b>Altura</b> dá só um leve impulso para cima.</li>
+              <li><b>Tiro</b>: em pé, com corrida curta, a bola vai <b>pelo alto</b> e forte para acertar e tirar a bola adversária (ou o bolim) do lugar. Use <b>PONTO / TIRO</b> ao lado da barra de altura ou a tecla <kbd>T</kbd>.</li>
               <li><b>Força</b>: quanto mais força, mais longe. A marca na barra mostra o limite do telhado para a altura escolhida.</li>
               <li><b>Direção</b> e <b>posição</b>: mire e escolha de que ponto da cabeceira arremessar.</li>
-              <li><b>Tiro</b>: bola mais baixa e forte direto na bola adversária para tirá-la do lugar — pode acertar pelo ar.</li>
+              <li><b>Mira</b>: a faixa colorida mostra o caminho inteiro da bola e a bola fantasma mostra onde ela para em cancha livre. Choques com outras bolas não entram na previsão. Fica vermelha se a bola for bater no fundo e ser anulada.</li>
             </ul>
             <h3>Controles</h3>
             <div class="controls-help">
@@ -280,7 +285,7 @@
               </div>
               <div>
                 <h4>Teclado</h4>
-                <p><kbd>←</kbd><kbd>→</kbd> direção · <kbd>↑</kbd><kbd>↓</kbd> altura · <kbd>W</kbd><kbd>S</kbd> força · <kbd>A</kbd><kbd>D</kbd> posição · <kbd>Shift</kbd> ajuste fino · <kbd>Espaço</kbd> / <kbd>Enter</kbd> lançar · <kbd>C</kbd> câmera · <kbd>V</kbd> distâncias · <kbd>Esc</kbd> menu</p>
+                <p><kbd>T</kbd> ponto/tiro · <kbd>←</kbd><kbd>→</kbd> direção · <kbd>↑</kbd><kbd>↓</kbd> altura · <kbd>W</kbd><kbd>S</kbd> força · <kbd>A</kbd><kbd>D</kbd> posição · <kbd>Shift</kbd> ajuste fino · <kbd>Espaço</kbd> / <kbd>Enter</kbd> lançar · <kbd>C</kbd> câmera · <kbd>V</kbd> distâncias · <kbd>Esc</kbd> menu</p>
               </div>
             </div>
           </div>

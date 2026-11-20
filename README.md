@@ -6,17 +6,23 @@ instalar nada e sem cadastro.
 **▶ Jogar:** https://gabrielseibel.github.io/bocha-3d/
 
 Cancha de saibro coberta, tabelas, torcida apoiada na mureta, bolas azuis e vermelhas e o
-bolim branco. Os lançamentos são **pelo alto, em parábola**, com física de verdade: a bola
-voa, cai no saibro, quica pouco, rola e para pelo atrito, bate em outras bolas e pode
-deslocar o bolim.
+bolim branco. Dois jeitos de jogar, como na cancha de verdade:
+
+- **Ponto** (padrão): o jogador se agacha e solta a bola **rente ao chão**, rolando até o bolim.
+- **Tiro**: corrida curta e a bola vai **pelo alto**, forte, para acertar e tirar a bola
+  adversária (ou o bolim) do lugar — inclusive pelo ar.
+
+Física de verdade: a bola rola e para pelo atrito, quica pouco no saibro, bate em outras bolas
+e pode deslocar o bolim.
 
 ## Recursos
 
 - **Física própria e determinística** (480 Hz): parábola com arrasto do ar, impacto no
   saibro, deslizamento → rolamento, colisões entre bolas em 3D (inclusive **tiro de ar**),
   tabelas laterais e de fundo.
-- **Altura, força e direção importam**: bola alta cai e para perto; bola baixa rola muito;
-  tiro rasante e forte tira a bola adversária do lugar.
+- **Mira com o caminho inteiro**: faixa na cor da equipe mostrando o voo e a rolagem até a
+  bola fantasma onde ela para (em cancha livre — os choques continuam sendo habilidade); fica
+  vermelha se a bola for bater no fundo e ser anulada.
 - **Modos**: contra o computador (fácil, médio, difícil), dois jogadores no mesmo aparelho e
   treinamento livre (bolas ilimitadas, distância de cada bola, bola adversária para treinar
   o tiro, bolim aleatório ou lançado).
@@ -34,6 +40,7 @@ deslocar o bolim.
 
 | | Mouse / toque | Teclado |
 |---|---|---|
+| Ponto / tiro | botões **PONTO** / **TIRO** | `T` |
 | Força | arrastar para **baixo** (ou barra **Força**) | `W` / `S` |
 | Direção | arrastar para os **lados** (ou ◀ ▶) | `←` / `→` |
 | Altura | barra **Altura** (ou roda do mouse) | `↑` / `↓` |
@@ -41,7 +48,7 @@ deslocar o bolim.
 | Lançar | soltar o arraste ou **LANÇAR** | `Espaço` / `Enter` |
 | Câmera / distâncias / menu | botões no canto | `C` / `V` / `Esc` |
 
-`Shift` faz ajuste fino. Na câmera do bolim e na visão geral, arrastar gira a câmera e a
+`Shift` faz ajuste fino. Durante a jogada, segurar na tela (ou `Espaço`) acelera a bola. Na câmera do bolim e na visão geral, arrastar gira a câmera e a
 roda/pinça aproxima.
 
 ## Regras

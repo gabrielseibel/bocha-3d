@@ -53,6 +53,9 @@ export class Stage {
     this.scene.add(this.sun);
     this.scene.add(this.sun.target);
 
+    // camada 1: só a câmera principal; camada 2: só a janela do bolim
+    this.camera.layers.enable(1);
+    this.pipCamera.layers.enable(2);
     this.buildEnvironmentMap();
     this.applyQuality();
   }

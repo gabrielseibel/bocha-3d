@@ -1,6 +1,6 @@
 import { AIM, type CourtSpec } from '../config';
 import type { Team } from '../physics/world';
-import type { Aim } from '../physics/shot';
+import { STYLE_RANGE, styleOf, type Aim, type ShotStyle } from '../physics/shot';
 import { clamp } from '../util/math';
 
 export function byId<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -18,6 +18,7 @@ export interface HudCallbacks {
   /** ajuste absoluto (barras), valor 0..1 */
   setFraction(field: 'power' | 'arc', v: number): void;
   throwNow(): void;
+  style(s: ShotStyle): void;
   pause(): void;
   camera(): void;
   distances(): void;
@@ -118,6 +119,8 @@ export class Hud {
     dragBar(this.powerMeter, false, (v) => cb.setFraction('power', v), (d) => cb.nudge('power', d));
     dragBar(this.arcSlider, true, (v) => cb.setFraction('arc', v), (d) => cb.nudge('arc', d));
     this.throwBtn.addEventListener('click', () => cb.throwNow());
+    byId('style-ponto').addEventListener('click', () => cb.style('ponto'));
+    byId('style-tiro').addEventListener('click', () => cb.style('tiro'));
     const click = (id: string, fn: () => void) =>
       byId(id).addEventListener('click', () => {
         cb.click();
@@ -215,11 +218,16 @@ export class Hud {
     const yaw = Math.abs(aim.yaw) < 0.05 ? 0 : aim.yaw;
     this.yawValue.textContent = `${yaw > 0 ? '+' : ''}${fmt(yaw)}°`;
     this.arcValue.textContent = `${Math.round(aim.arc)}°`;
-    const f = (aim.arc - AIM.arcMin) / (AIM.arcMax - AIM.arcMin);
+    const style = styleOf(aim.arc);
+    const range = STYLE_RANGE[style];
+    const f = (aim.arc - range.min) / (range.max - range.min);
+    byId('style-ponto').setAttribute('aria-pressed', String(style === 'ponto'));
+    byId('style-tiro').setAttribute('aria-pressed', String(style === 'tiro'));
+    this.controls.classList.toggle('tiro', style === 'tiro');
     this.arcFill.style.height = `${f * 100}%`;
     this.arcThumb.style.bottom = `${f * 100}%`;
     this.arcSlider.setAttribute('aria-valuenow', String(Math.round(aim.arc)));
-    const apex = (20 * Math.sin((aim.arc * Math.PI) / 180)) / Math.sin((62 * Math.PI) / 180);
+    const apex = style === 'ponto' ? 1 + f * 3 : 6 + f * 14;
     this.arcPath.setAttribute('d', `M2 22 Q 20 ${(22 - 2 * apex).toFixed(1)} 38 22`);
     const hw = court.width / 2 - AIM.lateralMargin;
     this.posDot.style.left = `${(6 + 88 * ((aim.x0 + hw) / (2 * hw))).toFixed(1)}%`;

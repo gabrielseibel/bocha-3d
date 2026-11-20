@@ -34,7 +34,7 @@ interface DiffCfg {
 
 export const DIFFICULTY: Record<Difficulty, DiffCfg> = {
   easy: {
-    arcs: [46],
+    arcs: [4],
     laterals: 1,
     hits: false,
     pushes: false,
@@ -45,7 +45,7 @@ export const DIFFICULTY: Record<Difficulty, DiffCfg> = {
     blunder: 0.3,
   },
   medium: {
-    arcs: [52, 38],
+    arcs: [3, 9],
     laterals: 2,
     hits: true,
     pushes: true,
@@ -56,7 +56,7 @@ export const DIFFICULTY: Record<Difficulty, DiffCfg> = {
     blunder: 0.08,
   },
   hard: {
-    arcs: [56, 46, 34],
+    arcs: [2, 6, 11],
     laterals: 3,
     hits: true,
     pushes: true,
@@ -199,7 +199,7 @@ export function planBall(data: WorldData, team: Team, difficulty: Difficulty, se
   const base = quiet(World.fromData(data));
   const court = base.court;
   const bolim = base.bolim;
-  if (!bolim) return { aim: clampAim({ x0: 0, yaw: 0, arc: 45, power: 0.5 }, court), intent: 'ponto', expected: 0 };
+  if (!bolim) return { aim: clampAim({ x0: 0, yaw: 0, arc: 4, power: 0.5 }, court), intent: 'ponto', expected: 0 };
 
   const opp = otherTeam(team);
   const ranking = rankBalls(base.bodies, bolim);
@@ -225,7 +225,7 @@ export function planBall(data: WorldData, team: Team, difficulty: Difficulty, se
     const tb = base.get(t.id) as Body;
     const x0 = clamp(tb.px * 0.5, -(court.width / 2 - 0.35), court.width / 2 - 0.35);
     if (cfg.hits) {
-      for (const arc of [16, 23, 30]) {
+      for (const arc of [18, 26, 34]) {
         const aim = powerToHit(court, x0, arc, tb.px, tb.pz, cfg.powerIters);
         if (aim) candidates.push({ aim, intent: 'tiro', targetId: t.id, expected: 0 });
       }
@@ -234,7 +234,7 @@ export function planBall(data: WorldData, team: Team, difficulty: Difficulty, se
       const yaw = yawTo(x0, tb.px, tb.pz, court);
       const dx = Math.sin((yaw * Math.PI) / 180);
       const dz = -Math.cos((yaw * Math.PI) / 180);
-      const aim = powerToStop(court, base.backWallRule, 'ball', x0, 30, tb.px + dx * 0.5, tb.pz + dz * 0.5, cfg.powerIters);
+      const aim = powerToStop(court, base.backWallRule, 'ball', x0, 4, tb.px + dx * 0.5, tb.pz + dz * 0.5, cfg.powerIters);
       candidates.push({ aim, intent: 'empurrar', targetId: t.id, expected: 0 });
     }
   }
@@ -284,7 +284,7 @@ export function planBolim(data: WorldData, difficulty: Difficulty, seed: number)
   const s = rng.range(court.bolimMin + 1.2, court.bolimMax - 1.2);
   const tx = clamp(rng.gauss(0, 0.35), -(court.width / 2 - 0.5), court.width / 2 - 0.5);
   const x0 = clamp(tx * 0.5, -(court.width / 2 - 0.35), court.width / 2 - 0.35);
-  const aim = powerToStop(court, false, 'bolim', x0, 42, tx, -s, cfg.powerIters);
+  const aim = powerToStop(court, false, 'bolim', x0, 4, tx, -s, cfg.powerIters);
   const executed = limitAimToCourt(perturb(aim, cfg, rng, court), court, 'bolim');
   return { aim: executed, intent: 'lancar-bolim', expected: 0 };
 }

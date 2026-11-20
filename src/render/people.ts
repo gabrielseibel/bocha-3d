@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { CourtSpec } from '../config';
 import type { Team } from '../physics/world';
+import type { ShotStyle } from '../physics/shot';
 import { clamp, damp, easeInOutSine, lerp } from '../util/math';
 import { Rng } from '../util/rng';
 
@@ -167,6 +168,8 @@ interface Pose {
 }
 
 const READY: Pose = { pelvis: 0.9, lean: 0.18, armR: 0.25, armL: 0.15, legL: 0.12, kneeL: 0.18, legR: -0.05, kneeR: 0.12 };
+/** agachado mirando, bola na mão perto do chão */
+const PONTO_READY: Pose = { pelvis: 0.52, lean: 0.72, armR: 0.2, armL: -0.4, legL: 1.05, kneeL: 1.75, legR: -0.15, kneeR: 1.45 };
 
 /** Jogador que faz o arremesso por baixo (pêndulo) — a bola sai no ponto exato da física. */
 export class Thrower {
@@ -277,16 +280,36 @@ export class Thrower {
     this.kneeR.rotation.x = -p.kneeR;
   }
 
-  private releasePose(armRel: number): Pose {
-    return { pelvis: 0.78, lean: 0.42, armR: armRel, armL: -0.35, legL: 0.62, kneeL: 0.55, legR: -0.38, kneeR: 0.3 };
+  /** estilo do arremesso atual: ponto (agachado, rente ao chão) ou tiro (corrida, alto) */
+  private style: ShotStyle = 'ponto';
+  /** deslocamento da corrida do tiro (m para trás do ponto de soltura) */
+  private run = 0;
+
+  private readyPose(): Pose {
+    return this.style === 'ponto' ? PONTO_READY : READY;
+  }
+
+  private releasePose(armRel: number, style = this.style): Pose {
+    if (style === 'ponto') {
+      // joelho de trás quase no chão, tronco bem inclinado, mão rente ao saibro
+      return { pelvis: 0.4, lean: 0.85, armR: armRel, armL: -0.55, legL: 1.2, kneeL: 2.1, legR: -0.25, kneeR: 1.9 };
+    }
+    return { pelvis: 0.8, lean: 0.32, armR: armRel, armL: -0.5, legL: 0.62, kneeL: 0.5, legR: -0.4, kneeR: 0.3 };
+  }
+
+  setStyle(style: ShotStyle): void {
+    this.style = style;
   }
 
   /**
    * Posiciona o jogador para que, no instante da soltura, o centro da bola na mão
    * coincida com o ponto de lançamento da física.
    */
-  placeFor(release: { x: number; y: number; z: number }): void {
+  placeFor(release: { x: number; y: number; z: number }, style: ShotStyle = this.style): void {
+    this.style = style;
     const saved = this.pose;
+    const savedRun = this.run;
+    this.run = 0;
     // altura do ombro na pose de soltura (braço vertical)
     this.pose = this.releasePose(0);
     this.root.position.set(0, 0, 0);
@@ -302,14 +325,17 @@ export class Thrower {
     this.root.updateMatrixWorld(true);
     const hand = new THREE.Vector3();
     this.heldBall.getWorldPosition(hand);
-    this.root.position.set(release.x - hand.x, 0, release.z - hand.z);
+    this.base.set(release.x - hand.x, 0, release.z - hand.z);
     this.pose = saved;
+    this.run = savedRun;
     this.applyPose();
   }
 
+  private readonly base = new THREE.Vector3();
+
   /** inicia o arremesso; onRelease é chamado no instante da soltura */
   throw(onRelease: () => void): void {
-    this.anim = { t: 0, release: 0.78, armRel: this.relArm, onRelease };
+    this.anim = { t: 0, release: this.style === 'ponto' ? 0.95 : 1.05, armRel: this.relArm, onRelease };
     this.recover = 0;
   }
 
@@ -326,19 +352,50 @@ export class Thrower {
     this.targetOpacity = f ? 0.25 : 1;
   }
 
+  private animate(a: { t: number; release: number; armRel: number }): void {
+    const rel = this.releasePose(a.armRel);
+    if (this.style === 'ponto') {
+      // agacha, balança o braço para trás rente ao chão e solta a bola rolando
+      const crouch: Pose = { ...rel, armR: 0.15, armL: -0.3 };
+      const back: Pose = { ...rel, armR: -0.95, armL: 0.25, lean: 0.8 };
+      const follow: Pose = { ...rel, armR: a.armRel + 0.75, lean: 0.75, armL: -0.7 };
+      const t1 = 0.35;
+      const t2 = 0.62;
+      if (a.t < t1) this.pose = mix(PONTO_READY, crouch, easeInOutSine(a.t / t1));
+      else if (a.t < t2) this.pose = mix(crouch, back, easeInOutSine((a.t - t1) / (t2 - t1)));
+      else if (a.t < a.release) this.pose = mix(back, rel, easeInOutSine((a.t - t2) / (a.release - t2)));
+      else this.pose = mix(rel, follow, easeInOutSine((a.t - a.release) / 0.4));
+      this.run = 0;
+      return;
+    }
+    // tiro: corrida curta, braço lá atrás e soltura alta e forte
+    const RUN = 1.15;
+    const tRun = 0.62;
+    const back: Pose = { pelvis: 0.86, lean: 0.25, armR: -1.6, armL: 0.35, legL: 0.45, kneeL: 0.4, legR: -0.3, kneeR: 0.35 };
+    const follow: Pose = { ...rel, armR: Math.min(2.6, a.armRel + 1.0), lean: 0.22, pelvis: 0.84, armL: -0.6 };
+    if (a.t < a.release) {
+      const k = clamp(a.t / a.release, 0, 1);
+      this.run = RUN * (1 - easeInOutSine(k));
+      if (a.t < tRun) {
+        const stride = Math.sin((a.t / tRun) * Math.PI * 3);
+        const base = mix(READY, back, easeInOutSine(a.t / tRun));
+        this.pose = { ...base, legL: base.legL + stride * 0.55, legR: base.legR - stride * 0.55, kneeL: base.kneeL + Math.max(0, -stride) * 0.6, kneeR: base.kneeR + Math.max(0, stride) * 0.6, pelvis: base.pelvis + Math.abs(stride) * 0.03 };
+      } else this.pose = mix(back, rel, easeInOutSine((a.t - tRun) / (a.release - tRun)));
+    } else {
+      this.run = 0;
+      this.pose = mix(rel, follow, easeInOutSine((a.t - a.release) / 0.35));
+    }
+  }
+
   update(dt: number): void {
     if (this.anim) {
       const a = this.anim;
       a.t += dt;
-      const rel = this.releasePose(a.armRel);
-      const back: Pose = { pelvis: 0.83, lean: 0.3, armR: -1.25, armL: 0.1, legL: 0.3, kneeL: 0.35, legR: -0.12, kneeR: 0.2 };
-      const follow: Pose = { ...rel, armR: Math.min(2.3, a.armRel + 0.9), lean: 0.3, pelvis: 0.8, armL: -0.45 };
-      const tBack = 0.42;
-      if (a.t < tBack) this.pose = mix(READY, back, easeInOutSine(a.t / tBack));
-      else if (a.t < a.release) this.pose = mix(back, rel, easeInOutSine((a.t - tBack) / (a.release - tBack)));
-      else this.pose = mix(rel, follow, easeInOutSine((a.t - a.release) / 0.35));
+      this.animate(a);
       if (a.onRelease && a.t >= a.release) {
         // pose exata da soltura neste quadro para a bola sair do lugar certo
+        this.pose = this.releasePose(a.armRel);
+        this.run = 0;
         const cb = a.onRelease;
         a.onRelease = null;
         this.heldBall.visible = false;
@@ -348,11 +405,14 @@ export class Thrower {
         this.anim = null;
         this.recover = 1;
       }
-    } else if (this.recover > 0) {
-      this.recover = Math.max(0, this.recover - dt * 1.4);
-      this.pose = mix(READY, this.pose, this.recover);
+    } else {
+      // pose de espera (agachado no ponto, em pé no tiro), com transição suave
+      this.pose = mix(this.pose, this.readyPose(), 1 - Math.exp(-(this.recover > 0 ? 2.5 : 9) * dt));
+      this.recover = Math.max(0, this.recover - dt);
+      this.run = 0;
     }
     this.applyPose();
+    this.root.position.set(this.base.x, 0, this.base.z + this.run);
     this.opacity = damp(this.opacity, this.targetOpacity, 8, dt);
     const transparent = this.opacity < 0.99;
     for (const m of this.materials) {
@@ -367,9 +427,11 @@ export class Thrower {
   reset(): void {
     this.anim = null;
     this.recover = 0;
-    this.pose = { ...READY };
+    this.run = 0;
+    this.pose = { ...this.readyPose() };
     this.heldBall.visible = true;
     this.applyPose();
+    this.root.position.set(this.base.x, 0, this.base.z);
   }
 }
 
