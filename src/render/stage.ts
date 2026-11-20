@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { LightPreset } from './venueStyle';
 
 export type Quality = 'high' | 'medium' | 'low';
 
@@ -58,6 +59,41 @@ export class Stage {
     this.pipCamera.layers.enable(2);
     this.buildEnvironmentMap();
     this.applyQuality();
+  }
+
+  private readonly nightLights = new THREE.Group();
+
+  /** iluminação de cada ambiente */
+  setLighting(preset: LightPreset, lamps: THREE.Vector3[] = []): void {
+    const P = {
+      day: { bg: '#cfe2f2', fog: '#d6e4ee', near: 45, far: 190, sky: '#eaf4ff', ground: '#8c7656', hemi: 1.15, sun: '#fff4e2', sunI: 2.1, exp: 1.05, env: 0.55 },
+      afternoon: { bg: '#efd9b6', fog: '#ecdcc2', near: 40, far: 170, sky: '#fff0d6', ground: '#8a6a48', hemi: 1.0, sun: '#ffd49a', sunI: 2.35, exp: 1.0, env: 0.5 },
+      night: { bg: '#0a1222', fog: '#0a1222', near: 22, far: 95, sky: '#53689a', ground: '#2c2218', hemi: 0.5, sun: '#ffcf8a', sunI: 1.45, exp: 1.15, env: 0.2 },
+      indoor: { bg: '#30353b', fog: '#30353b', near: 70, far: 220, sky: '#ffffff', ground: '#8a8074', hemi: 1.0, sun: '#fffaf0', sunI: 1.75, exp: 1.0, env: 0.45 },
+    }[preset];
+    (this.scene.background as THREE.Color).set(P.bg);
+    const fog = this.scene.fog as THREE.Fog;
+    fog.color.set(P.fog);
+    fog.near = P.near;
+    fog.far = P.far;
+    this.hemi.color.set(P.sky);
+    this.hemi.groundColor.set(P.ground);
+    this.hemi.intensity = P.hemi;
+    this.sun.color.set(P.sun);
+    this.sun.intensity = P.sunI;
+    this.renderer.toneMappingExposure = P.exp;
+    this.scene.environmentIntensity = P.env;
+    // à noite, algumas luzes pontuais quentes das lâmpadas (poucas, por desempenho)
+    this.nightLights.clear();
+    if (preset === 'night' && lamps.length) {
+      const step = Math.max(1, Math.floor(lamps.length / 4));
+      for (let i = 0; i < lamps.length && this.nightLights.children.length < 4; i += step) {
+        const l = new THREE.PointLight('#ffc879', 9, 11, 1.6);
+        l.position.copy(lamps[i]);
+        this.nightLights.add(l);
+      }
+    }
+    if (!this.nightLights.parent) this.scene.add(this.nightLights);
   }
 
   /** enquadra a sombra do "sol" na cancha */

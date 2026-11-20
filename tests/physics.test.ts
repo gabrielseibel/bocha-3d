@@ -109,6 +109,25 @@ describe('colisões', () => {
     }
   });
 
+  it('tabelada: bola rolando que bate na lateral volta para o meio', () => {
+    const hw = court.width / 2;
+    for (const side of [1, -1]) {
+      const w = new World(court);
+      const b = launchBody(w, 'ball', 'blue', { x0: -side * 1.2, yaw: side * 13, arc: 3, power: 0.7 });
+      let hit = false;
+      let after = 0;
+      while (!w.atRest && w.time < 40) {
+        w.step();
+        if (!hit && Math.abs(b.px) >= hw - b.r - 1e-6) hit = true;
+        if (hit) after = Math.max(after, hw - Math.abs(b.px));
+      }
+      expect(hit).toBe(true);
+      // depois da batida ela se afasta bem da tabela (não fica grudada)
+      expect(after).toBeGreaterThan(0.6);
+      expect(hw - Math.abs(b.px)).toBeGreaterThan(0.4);
+    }
+  });
+
   it('a mira não deixa o voo passar por cima da tabela lateral', () => {
     const a = limitAimToCourt({ x0: 1.2, yaw: 14, arc: 55, power: 0.7 }, court);
     expect(a.yaw).toBeLessThan(14);

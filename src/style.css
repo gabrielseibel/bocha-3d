@@ -970,6 +970,13 @@ svg {
   color: var(--muted);
 }
 
+.field-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
 .seg {
   display: flex;
   flex-wrap: wrap;
@@ -997,6 +1004,33 @@ svg {
   background: var(--text);
   color: #10161d;
   border-color: transparent;
+}
+
+.seg.venues {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.seg.venues button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  padding: 8px 10px;
+}
+
+.seg.venues b {
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.seg.venues small {
+  font-family: var(--body);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0;
+  opacity: 0.75;
 }
 
 .seg-num button {
@@ -1653,6 +1687,12 @@ kbd {
   .seg button {
     padding: 6px 8px;
     font-size: 14px;
+  }
+  .seg.venues small {
+    display: none;
+  }
+  .seg.venues b {
+    font-size: 13px;
   }
   .field {
     gap: 4px;

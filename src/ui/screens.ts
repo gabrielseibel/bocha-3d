@@ -183,6 +183,13 @@ export class Screens {
     }
     for (const sw of document.querySelectorAll<HTMLElement>('.switch[data-setting]')) sw.setAttribute('aria-checked', String(!!s[sw.dataset.setting!]));
     byId<HTMLInputElement>('set-volume').value = String(Math.round(this.settings.volume * 100));
+    const note = document.getElementById('guide-note');
+    if (note) {
+      const g = this.settings.guide;
+      const eff = g !== 'auto' ? g : this.settings.difficulty === 'easy' ? 'full' : this.settings.difficulty === 'medium' ? 'short' : 'off';
+      note.textContent =
+        eff === 'full' ? 'Mira mostra onde a bola vai parar.' : eff === 'short' ? 'Mira mostra só o começo da jogada.' : 'Mira mostra só a direção — sem previsão.';
+    }
     for (const el of document.querySelectorAll<HTMLElement>('[data-show-if]')) {
       const [k, v] = el.dataset.showIf!.split('=');
       el.hidden = String(s[k]) !== v;

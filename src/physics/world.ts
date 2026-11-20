@@ -236,7 +236,8 @@ export class World {
     // resistência ao rolamento do saibro
     const sp = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
     if (sp > 0) {
-      const dec = (b.rollRes * GRAVITY + GROUND.rollDrag * sp) * dt;
+      const sf = this.court.surface;
+      const dec = (b.rollRes * sf.rollRes * GRAVITY + sf.rollDrag * sp) * dt;
       const f = sp > dec ? (sp - dec) / sp : 0;
       b.vx *= f;
       b.vz *= f;
@@ -251,10 +252,11 @@ export class World {
 
   private groundImpact(b: Body, vn: number, plowScale: number): void {
     const r = b.r;
-    const e = GROUND.restitution / (1 + GROUND.restitutionK * vn);
+    const sf = this.court.surface;
+    const e = sf.restitution / (1 + GROUND.restitutionK * vn);
     const jn = b.m * (1 + e) * vn;
     // a bola afunda no saibro: perde parte da velocidade tangencial
-    const plow = Math.min(GROUND.plowMax, GROUND.plow * vn * plowScale);
+    const plow = Math.min(GROUND.plowMax, sf.plow * vn * plowScale);
     b.vx *= 1 - plow;
     b.vz *= 1 - plow;
     b.wx *= 1 - plow;
@@ -416,9 +418,21 @@ export class World {
       b.vx *= keep;
     }
     b.vy *= keep;
-    b.wx *= keep;
     b.wy *= keep;
-    b.wz *= keep;
+    // a tabela devolve a bola rolando no novo sentido: sem isso o giro antigo
+    // (de quem rolava para a parede) a puxaria de volta e ela "grudaria" na tabela
+    if (b.grounded) {
+      if (side) {
+        b.wz = -b.vx / b.r;
+        b.wx = b.vz / b.r;
+      } else {
+        b.wx = b.vz / b.r;
+        b.wz = -b.vx / b.r;
+      }
+    } else {
+      b.wx *= keep;
+      b.wz *= keep;
+    }
     b.asleep = false;
     b.restTime = 0;
     if (this.recordEvents && vn > 0.08) {

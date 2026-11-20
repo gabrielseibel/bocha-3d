@@ -20,9 +20,13 @@ e pode deslocar o bolim.
 - **Física própria e determinística** (480 Hz): parábola com arrasto do ar, impacto no
   saibro, deslizamento → rolamento, colisões entre bolas em 3D (inclusive **tiro de ar**),
   tabelas laterais e de fundo.
-- **Mira com o caminho inteiro**: faixa na cor da equipe mostrando o voo e a rolagem até a
-  bola fantasma onde ela para (em cancha livre — os choques continuam sendo habilidade); fica
-  vermelha se a bola for bater no fundo e ser anulada.
+- **Quatro canchas**: Sociedade Recreativa (saibro coberto), Comunidade do Interior (terra
+  batida, telhado de barro, capela e araucárias), Bar de Esquina (noite, areia fina, varal de
+  lâmpadas, mesas de bar) e Ginásio (carpete sintético, bola corre muito). Cada piso tem física
+  própria.
+- **Tabelada**: a bola que bate na lateral volta rolando para o meio.
+- **Mira pela dificuldade**: no fácil/treino mostra o caminho inteiro até a bola fantasma onde
+  ela para; no médio e em dois jogadores só o começo; no difícil só a direção (configurável).
 - **Modos**: contra o computador (fácil, médio, difícil), dois jogadores no mesmo aparelho e
   treinamento livre (bolas ilimitadas, distância de cada bola, bola adversária para treinar
   o tiro, bolim aleatório ou lançado).

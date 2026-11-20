@@ -73,13 +73,13 @@ function tiroMaxSpeed(court: CourtSpec): number {
   return Math.sqrt(GRAVITY * range) * 1.03;
 }
 
-const pontoCache = new Map<number, number>();
+const pontoCache = new Map<string, number>();
 /**
  * ponto: com força total a bola rolando chega ~1,5 m além do fundo.
  * Calculado uma vez por comprimento de cancha simulando o rolamento.
  */
 function pontoMaxSpeed(court: CourtSpec): number {
-  const key = court.length;
+  const key = `${court.length}|${court.surface.name}`;
   const cached = pontoCache.get(key);
   if (cached) return cached;
   const target = court.length + 1.5 - releaseDistance(court);

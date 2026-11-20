@@ -84,7 +84,8 @@ export interface ClayTextures {
 }
 
 /** saibro compactado: bege-alaranjado, grãos, pedriscos e marcas de rastelo */
-export function clayTextures(size: number): ClayTextures {
+/** saibro/terra/areia: base RGB do piso */
+export function clayTextures(size: number, base: [number, number, number] = [201, 163, 112]): ClayTextures {
   const rng = new Rng(7);
   const n = fbm(11, 4, 5);
   const fine = fbm(23, 32, 2);
@@ -99,9 +100,9 @@ export function clayTextures(size: number): ClayTextures {
       const f = fine(u, v);
       const k = 0.9 + 0.2 * a + 0.06 * (f - 0.5);
       const i = (y * size + x) * 4;
-      img.data[i] = Math.min(255, 201 * k);
-      img.data[i + 1] = Math.min(255, 163 * k);
-      img.data[i + 2] = Math.min(255, 112 * k * (0.97 + 0.06 * a));
+      img.data[i] = Math.min(255, base[0] * k);
+      img.data[i + 1] = Math.min(255, base[1] * k);
+      img.data[i + 2] = Math.min(255, base[2] * k * (0.97 + 0.06 * a));
       img.data[i + 3] = 255;
       height[y * size + x] = f * 0.6 + a * 0.4;
     }
@@ -157,6 +158,43 @@ export function clayTextures(size: number): ClayTextures {
   }
   ctx.globalAlpha = 1;
   const normal = normalFromHeight(height, size, 2.2);
+  return { map: toTexture(c, true, true), normal: toTexture(normal, false, true) };
+}
+
+/** carpete sintético (como nos ginásios de bocha): fibras verdes curtas */
+export function carpetTextures(size: number, base: [number, number, number] = [44, 112, 84]): ClayTextures {
+  const rng = new Rng(19);
+  const n = fbm(37, 8, 3);
+  const [c, ctx] = canvas(size, size);
+  const img = ctx.createImageData(size, size);
+  const height = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const a = n(x / size, y / size);
+      const fiber = rng.next();
+      const k = 0.86 + 0.14 * a + 0.12 * (fiber - 0.5);
+      const i = (y * size + x) * 4;
+      img.data[i] = Math.min(255, base[0] * k);
+      img.data[i + 1] = Math.min(255, base[1] * k);
+      img.data[i + 2] = Math.min(255, base[2] * k);
+      img.data[i + 3] = 255;
+      height[y * size + x] = fiber * 0.7 + a * 0.3;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  // marcas de "pelo" do carpete penteado ao longo da cancha
+  ctx.globalAlpha = 0.06;
+  for (let i = 0; i < 260; i++) {
+    const x = rng.range(0, size);
+    ctx.strokeStyle = rng.next() < 0.5 ? '#0d3a28' : '#9fe0b8';
+    ctx.lineWidth = rng.range(0.5, 1.4);
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x + rng.range(-3, 3), size);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  const normal = normalFromHeight(height, size, 1.1);
   return { map: toTexture(c, true, true), normal: toTexture(normal, false, true) };
 }
 
@@ -284,6 +322,26 @@ export function brickTexture(): THREE.CanvasTexture {
       ctx.fillStyle = `rgb(${r},${r * 0.45 + rng.range(0, 15)},${r * 0.3})`;
       ctx.fillRect(x + off + 1, row * bh + 1, bw - 2, bh - 2);
     }
+  }
+  return toTexture(c, true, true);
+}
+
+/** telha de barro (capa e canal) */
+export function tileTexture(): THREE.CanvasTexture {
+  const w = 64;
+  const h = 64;
+  const rng = new Rng(29);
+  const [c, ctx] = canvas(w, h);
+  for (let x = 0; x < w; x++) {
+    const k = 0.7 + 0.3 * Math.sin((x / w) * Math.PI);
+    ctx.fillStyle = `rgb(${Math.round(168 * k)},${Math.round(78 * k)},${Math.round(46 * k)})`;
+    ctx.fillRect(x, 0, 1, h);
+  }
+  ctx.fillStyle = 'rgba(40,15,8,0.35)';
+  ctx.fillRect(0, h - 5, w, 5);
+  for (let i = 0; i < 40; i++) {
+    ctx.fillStyle = rng.next() < 0.5 ? 'rgba(90,40,20,0.15)' : 'rgba(230,170,120,0.15)';
+    ctx.fillRect(rng.range(0, w), rng.range(0, h), rng.range(2, 6), rng.range(1, 3));
   }
   return toTexture(c, true, true);
 }

@@ -11,7 +11,8 @@ export interface Settings {
   volume: number;
   muted: boolean;
   quality: QualitySetting;
-  guide: 'off' | 'short' | 'full';
+  /** previsão da mira; 'auto' depende da dificuldade */
+  guide: 'auto' | 'off' | 'short' | 'full';
   pip: boolean;
   releaseToThrow: boolean;
   bolimMode: 'throw' | 'auto';
@@ -19,6 +20,8 @@ export interface Settings {
   slowMo: boolean;
   alwaysDistances: boolean;
   thrower: boolean;
+  /** tipo de cancha / ambiente */
+  venue: string;
   courtLength: number;
   courtWidth: number;
 }
@@ -31,7 +34,7 @@ export const DEFAULT_SETTINGS: Settings = {
   volume: 0.8,
   muted: false,
   quality: 'auto',
-  guide: 'full',
+  guide: 'auto',
   pip: true,
   releaseToThrow: true,
   bolimMode: 'throw',
@@ -39,11 +42,12 @@ export const DEFAULT_SETTINGS: Settings = {
   slowMo: true,
   alwaysDistances: false,
   thrower: true,
+  venue: 'clube',
   courtLength: 24,
   courtWidth: 3.6,
 };
 
-const KEY = 'bocha3d.settings.v2';
+const KEY = 'bocha3d.settings.v3';
 
 export function loadSettings(): Settings {
   try {

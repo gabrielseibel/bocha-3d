@@ -5,7 +5,7 @@ import type { Plan } from '../ai/planner';
 import { Sfx } from '../audio/sfx';
 import { World, type BodyKind, type Team } from '../physics/world';
 import { STYLE_RANGE, clampAim, defaultAim, limitAimToCourt, maxPowerForArc, releasePoint, styleOf, withStyle, type Aim, type ShotStyle } from '../physics/shot';
-import { AimGuide } from '../render/aimGuide';
+import { AimGuide, type GuideMode } from '../render/aimGuide';
 import { BallViews } from '../render/balls';
 import { CameraRig, type CamMode } from '../render/cameraRig';
 import { CourtView } from '../render/court';
@@ -13,7 +13,9 @@ import { Dust, Marks, Trail } from '../render/effects';
 import { Environment } from '../render/environment';
 import { Crowd, Thrower } from '../render/people';
 import { Stage, type PipRect, type Quality } from '../render/stage';
-import { clayTextures, type ClayTextures } from '../render/textures';
+import { carpetTextures, clayTextures, type ClayTextures } from '../render/textures';
+import { VENUE_STYLES, type VenueStyle } from '../render/venueStyle';
+import { venueById } from './venues';
 import { Hud, byId, type AimField, type TrainingAction } from '../ui/hud';
 import { Input } from '../ui/input';
 import { Labels } from '../ui/labels';
@@ -61,7 +63,9 @@ export class Game {
   private readonly screens: Screens;
   private readonly labels: Labels;
   readonly input: Input;
-  private readonly clay: ClayTextures;
+  /** texturas de piso geradas sob demanda, uma por cancha */
+  private readonly floors = new Map<string, ClayTextures>();
+  private style: VenueStyle = VENUE_STYLES.clube;
   private readonly pipEl = byId('pip');
   private heldBall: THREE.Mesh | null = null;
   private heldKey = '';
@@ -98,7 +102,6 @@ export class Game {
     this.qualityLevel = this.resolveQuality();
     this.stage = new Stage(canvas, this.qualityLevel);
     this.rig = new CameraRig(this.stage.camera, this.stage.pipCamera);
-    this.clay = clayTextures(this.qualityLevel === 'low' ? 256 : 512);
     this.env = new Environment(this.qualityLevel);
     this.balls = new BallViews(this.qualityLevel);
     const scene = this.stage.scene;
@@ -106,7 +109,7 @@ export class Game {
     this.guide.hide();
     this.thrower.root.visible = false;
 
-    this.court = makeCourt(settings.courtLength, settings.courtWidth);
+    this.court = this.currentSpec();
     this.buildCourt(this.court);
     this.menuWorld = this.makeMenuWorld();
     this.world = this.menuWorld;
@@ -190,15 +193,39 @@ export class Game {
     return coarse && small ? 'medium' : 'high';
   }
 
+  /** dimensões + piso da cancha escolhida nas configurações */
+  private currentSpec(): CourtSpec {
+    return makeCourt(this.settings.courtLength, this.settings.courtWidth, venueById(this.settings.venue));
+  }
+
+  private floorTextures(style: VenueStyle): ClayTextures {
+    let t = this.floors.get(style.id);
+    if (!t) {
+      const size = this.qualityLevel === 'low' ? 256 : 512;
+      t = style.floor.kind === 'carpet' ? carpetTextures(size, style.floor.color) : clayTextures(size, style.floor.color);
+      this.floors.set(style.id, t);
+    }
+    return t;
+  }
+
   private buildCourt(spec: CourtSpec): void {
+    const style = VENUE_STYLES[venueById(this.settings.venue).id];
+    this.style = style;
     this.courtView?.dispose();
-    this.courtView = new CourtView(spec, this.clay);
+    this.courtView = new CourtView(spec, style, this.floorTextures(style));
     this.stage.scene.add(this.courtView.group);
     this.stage.fitShadow(spec.length, spec.width);
-    this.env.layout(spec);
+    this.stage.setLighting(style.light, this.courtView.lampPositions);
+    this.env.layout(spec, style);
+    this.dust.setColor(style.dust);
     const crowdCount = this.qualityLevel === 'high' ? 24 : this.qualityLevel === 'medium' ? 16 : 9;
-    this.crowd.layout(spec, crowdCount);
+    this.crowd.layout(spec, Math.max(4, Math.round(crowdCount * style.crowd)));
     this.court = spec;
+    this.refreshPlaque();
+  }
+
+  private sameCourt(a: CourtSpec, b: CourtSpec): boolean {
+    return a.length === b.length && a.width === b.width && a.surface === b.surface && a.ceiling === b.ceiling;
   }
 
   private makeMenuWorld(): World {
@@ -283,8 +310,8 @@ export class Game {
   startMatch(mode: Mode): void {
     this.sfx.unlock();
     this.lastMode = mode;
-    const spec = makeCourt(this.settings.courtLength, this.settings.courtWidth);
-    if (spec.length !== this.court.length || spec.width !== this.court.width) {
+    const spec = this.currentSpec();
+    if (!this.sameCourt(spec, this.court)) {
       this.buildCourt(spec);
       this.menuWorld = this.makeMenuWorld();
     }
@@ -402,8 +429,9 @@ export class Game {
         break;
       case 'courtLength':
       case 'courtWidth':
+      case 'venue':
         if (this.state === 'menu') {
-          this.buildCourt(makeCourt(this.settings.courtLength, this.settings.courtWidth));
+          this.buildCourt(this.currentSpec());
           this.menuWorld = this.makeMenuWorld();
           this.balls.clear();
           this.world = this.menuWorld;
@@ -586,6 +614,16 @@ export class Game {
     this.setAim(a);
   }
 
+  /** quanto da previsão da mira mostrar (configurável; 'auto' segue a dificuldade) */
+  private guideMode(): GuideMode {
+    const g = this.settings.guide;
+    if (g !== 'auto') return g;
+    const m = this.match;
+    if (!m || m.isTraining) return 'full';
+    if (m.cfg.mode === 'pvp') return 'short';
+    return m.cfg.difficulty === 'easy' ? 'full' : m.cfg.difficulty === 'medium' ? 'short' : 'off';
+  }
+
   /** ponto (agachado, rasteiro) ou tiro (alto, para bater) */
   private setStyle(style: ShotStyle): void {
     if (!this.canHumanAim() || styleOf(this.aim.arc) === style) return;
@@ -694,7 +732,7 @@ export class Game {
     if (this.match && this.state !== 'menu') {
       const m = this.match;
       const aiming = (m.phase === 'aim' || m.phase === 'bolim-aim') && !this.pendingThrow;
-      if (aiming) this.guide.update(this.aim, this.court, this.kind, this.settings.guide, this.world.backWallRule, dt);
+      if (aiming) this.guide.update(this.aim, this.court, this.kind, this.guideMode(), this.world.backWallRule, dt);
       else this.guide.hide();
       this.thrower.root.visible = this.thrower.root.visible && this.settings.thrower;
     }
@@ -838,7 +876,7 @@ export class Game {
           const small = b?.kind === 'bolim';
           this.sfx.thud(e.speed, small);
           this.dust.burst(e.x, e.z, e.speed * (small ? 0.45 : 1), e.vx, e.vz);
-          if (e.speed > 1.1) this.marks.add(e.x, e.z, (small ? 0.06 : 0.12) + e.speed * (small ? 0.004 : 0.009), e.vx, e.vz);
+          if (e.speed > 1.1 && this.style.marks) this.marks.add(e.x, e.z, (small ? 0.06 : 0.12) + e.speed * (small ? 0.004 : 0.009), e.vx, e.vz);
           if (e.speed > 4.5 && !small) this.rig.addShake(0.12 + e.speed * 0.015);
           if (m && e.id === m.activeId && this.settleDelay < 0) this.settleDelay = 0.4;
           break;

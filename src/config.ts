@@ -1,3 +1,5 @@
+import { VENUES, type Surface, type VenueDef } from './game/venues';
+
 // Constantes físicas e dimensões padrão da cancha.
 // Sistema de coordenadas (o mesmo da física e do Three.js):
 //   x = lateral (+x à direita de quem arremessa), y = para cima,
@@ -45,7 +47,7 @@ export const GROUND = {
 };
 
 export const WALL = {
-  restitutionSide: 0.5,
+  restitutionSide: 0.62,
   restitutionEnd: 0.32,
   /** fração da velocidade tangencial perdida ao bater na tabela */
   friction: 0.12,
@@ -78,9 +80,11 @@ export interface CourtSpec {
   endWallHeight: number;
   /** altura livre sob a estrutura do telhado (m) — limita a parábola */
   ceiling: number;
+  /** piso (saibro, terra, areia, carpete) */
+  surface: Surface;
 }
 
-export function makeCourt(length = 24, width = 3.6): CourtSpec {
+export function makeCourt(length = 24, width = 3.6, venue: VenueDef = VENUES[0]): CourtSpec {
   return {
     length,
     width,
@@ -89,7 +93,8 @@ export function makeCourt(length = 24, width = 3.6): CourtSpec {
     bolimMax: length - 2,
     sideWallHeight: 0.95,
     endWallHeight: 1.2,
-    ceiling: 5.4,
+    ceiling: venue.ceiling,
+    surface: venue.surface,
   };
 }
 

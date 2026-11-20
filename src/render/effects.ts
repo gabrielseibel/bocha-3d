@@ -40,6 +40,10 @@ export class Dust {
     (this.points.material as THREE.ShaderMaterial).uniforms.scale.value = h * 0.9;
   }
 
+  setColor(c: string): void {
+    (this.points.material as THREE.ShaderMaterial).uniforms.color.value.set(c);
+  }
+
   /** nuvem de poeira: intensidade ~ velocidade do impacto (m/s) */
   burst(x: number, z: number, intensity: number, vx = 0, vz = 0, y = 0.02): void {
     const n = Math.min(60, Math.round(4 + intensity * 5));

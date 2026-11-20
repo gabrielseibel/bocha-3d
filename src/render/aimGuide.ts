@@ -5,6 +5,8 @@ import { predictPath, styleOf, type Aim } from '../physics/shot';
 
 export type GuideMode = 'off' | 'short' | 'full';
 
+const full0 = (m: GuideMode) => m === 'full';
+
 const MAX_PTS = 900;
 
 const vert = `attribute float along; attribute float side;
@@ -160,8 +162,7 @@ export class AimGuide {
   }
 
   update(aim: Aim, court: CourtSpec, kind: BodyKind, mode: GuideMode, backWallRule: boolean, dt: number): void {
-    this.group.visible = mode !== 'off';
-    if (mode === 'off') return;
+    this.group.visible = true;
     this.time += dt;
     this.line.mat.uniforms.time.value = this.time;
     this.linePip.mat.uniforms.time.value = this.time;
@@ -181,14 +182,24 @@ export class AimGuide {
     for (let i = 0; i < n; i++) {
       this.draw.push(p.points[i * 3], Math.max(0.008, p.points[i * 3 + 1] - r + 0.008), p.points[i * 3 + 2]);
     }
+    // modos parciais mostram um trecho de comprimento FIXO: indicam a direção
+    // (e a subida do tiro) sem revelar a força nem onde a bola para
     let count = n;
-    if (mode === 'short') count = Math.max(4, Math.floor(n * 0.45));
+    if (mode !== 'full') {
+      const limit = mode === 'short' ? 6 : 3;
+      let d = 0;
+      count = 1;
+      for (let i = 1; i < n && d < limit; i++, count++) {
+        d += Math.hypot(this.draw[i * 3] - this.draw[i * 3 - 3], this.draw[i * 3 + 1] - this.draw[i * 3 - 2], this.draw[i * 3 + 2] - this.draw[i * 3 - 1]);
+      }
+      count = Math.max(2, count);
+    }
     const total = this.line.set(this.draw, count, kind === 'bolim' ? 0.05 : 0.07, 0.0075);
     this.outline.set(this.draw, count, kind === 'bolim' ? 0.1 : 0.13, 0.0095);
     this.linePip.set(this.draw, count, 0.028, 0);
     this.outlinePip.set(this.draw, count, 0.05, 0);
-    for (const r of [this.line, this.outline, this.linePip, this.outlinePip]) r.mat.uniforms.total.value = mode === 'short' ? total : total + 1;
-    this.dead = p.dead;
+    for (const r of [this.line, this.outline, this.linePip, this.outlinePip]) r.mat.uniforms.total.value = mode === 'full' ? total + 1 : total;
+    this.dead = full0(mode) && p.dead;
     const c = this.dead ? new THREE.Color('#ff4d4d') : this.color;
     this.line.mat.uniforms.color.value.copy(c);
     this.linePip.mat.uniforms.color.value.copy(c);

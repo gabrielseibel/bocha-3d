@@ -1,9 +1,8 @@
 import * as THREE from 'three';
 import type { CourtSpec } from '../config';
 import { Rng } from '../util/rng';
-import { canvas, clayMacroTexture, concreteTexture, plaqueCanvas, roofTexture, woodTexture, type ClayTextures } from './textures';
-
-const BLUE_PAINT = '#2d5f97';
+import { canvas, clayMacroTexture, concreteTexture, plaqueCanvas, roofTexture, tileTexture, woodTexture, type ClayTextures } from './textures';
+import type { VenueStyle } from './venueStyle';
 
 export interface ScoreInfo {
   blue: number;
@@ -13,7 +12,7 @@ export interface ScoreInfo {
   training: boolean;
 }
 
-/** Cancha, tabelas, marcações e a cobertura metálica. Reconstruída quando as dimensões mudam. */
+/** Cancha, tabelas, marcações e cobertura de cada ambiente. Reconstruída ao trocar de cancha ou de dimensões. */
 export class CourtView {
   readonly group = new THREE.Group();
   readonly spec: CourtSpec;
@@ -21,12 +20,20 @@ export class CourtView {
   private plaqueCtx: CanvasRenderingContext2D;
   private plaqueTex: THREE.CanvasTexture;
 
-  constructor(spec: CourtSpec, clay: ClayTextures) {
+  readonly style: VenueStyle;
+  /** pontos de luz (lâmpadas) — usados pelo ambiente noturno */
+  readonly lampPositions: THREE.Vector3[] = [];
+
+  constructor(spec: CourtSpec, style: VenueStyle, floor: ClayTextures) {
     this.spec = spec;
-    this.buildFloor(clay);
+    this.style = style;
+    this.buildFloor(floor);
     this.buildLines();
     this.buildWalls();
-    this.buildStructure();
+    if (style.roof === 'steel') this.buildStructure();
+    else if (style.roof === 'tiles') this.buildTileRoof();
+    else if (style.roof === 'bulbs') this.buildBulbs();
+    else this.buildGym();
     const [, ctx, tex] = plaqueCanvas();
     this.plaqueCtx = ctx;
     this.plaqueTex = tex;
@@ -128,12 +135,17 @@ export class CourtView {
     const { length: L, width: W, sideWallHeight: H, endWallHeight: HE } = this.spec;
     const T = 0.16;
     const board = 0.3;
+    const st = this.style;
     const concrete = this.track(concreteTexture());
-    const wood = this.track(woodTexture('#8d6238'));
-    const paintedWood = this.track(woodTexture(BLUE_PAINT));
-    const concreteMat = this.track(new THREE.MeshStandardMaterial({ map: concrete, color: '#f2f0ea', roughness: 0.92 }));
-    const boardMat = this.track(new THREE.MeshStandardMaterial({ map: paintedWood, roughness: 0.7 }));
-    const capMat = this.track(new THREE.MeshStandardMaterial({ map: wood, roughness: 0.65 }));
+    const boardMat = this.track(new THREE.MeshStandardMaterial({ map: this.track(woodTexture(st.board)), roughness: 0.7 }));
+    const concreteMat =
+      st.wall.kind === 'wood'
+        ? this.track(new THREE.MeshStandardMaterial({ map: this.track(woodTexture(st.wall.color)), roughness: 0.75 }))
+        : this.track(new THREE.MeshStandardMaterial({ map: concrete, color: st.wall.color, roughness: 0.92 }));
+    const capMat =
+      st.cap.kind === 'wood'
+        ? this.track(new THREE.MeshStandardMaterial({ map: this.track(woodTexture(st.cap.color)), roughness: 0.65 }))
+        : this.track(new THREE.MeshStandardMaterial({ map: concrete, color: st.cap.color, roughness: 0.9 }));
 
     const box = (w: number, h: number, d: number, mat: THREE.Material, x: number, y: number, z: number, uvScale = 1) => {
       const g = this.track(new THREE.BoxGeometry(w, h, d));
@@ -170,7 +182,7 @@ export class CourtView {
     walkTex.repeat.set((W + 7) / 2, (L + 9) / 2);
     walkTex.needsUpdate = true;
     this.track(walkTex);
-    const walkMesh = new THREE.Mesh(walk, this.track(new THREE.MeshStandardMaterial({ map: walkTex, color: '#c9c6bd', roughness: 0.95 })));
+    const walkMesh = new THREE.Mesh(walk, this.track(new THREE.MeshStandardMaterial({ map: walkTex, color: st.walkway, roughness: 0.95 })));
     walkMesh.position.set(0, -0.012, -L / 2 + 1.2);
     walkMesh.receiveShadow = true;
     this.group.add(walkMesh);
@@ -277,22 +289,221 @@ export class CourtView {
 
   private buildPlaque(): void {
     const { length: L } = this.spec;
+    const roof = this.style.roof;
+    const y = roof === 'tiles' ? 2.75 : roof === 'bulbs' ? 2.05 : roof === 'indoor' ? 3.7 : 3.45;
+    const z = roof === 'bulbs' ? -L - 0.45 : -L + 0.35;
     const geo = this.track(new THREE.PlaneGeometry(2.6, 0.65));
     const mat = this.track(new THREE.MeshStandardMaterial({ map: this.plaqueTex, roughness: 0.6, emissive: '#ffffff', emissiveMap: this.plaqueTex, emissiveIntensity: 0.35 }));
     const plaque = new THREE.Mesh(geo, mat);
-    plaque.position.set(0, 3.45, -L + 0.35);
+    plaque.position.set(0, y, z);
     this.group.add(plaque);
-    const frame = new THREE.Mesh(this.track(new THREE.BoxGeometry(2.72, 0.77, 0.05)), this.track(new THREE.MeshStandardMaterial({ color: '#3b2a1c', roughness: 0.7 })));
-    frame.position.set(0, 3.45, -L + 0.32);
+    const brown = this.track(new THREE.MeshStandardMaterial({ color: '#3b2a1c', roughness: 0.7 }));
+    const frame = new THREE.Mesh(this.track(new THREE.BoxGeometry(2.72, 0.77, 0.05)), brown);
+    frame.position.set(0, y, z - 0.03);
     this.group.add(frame);
-    const wire = this.track(new THREE.CylinderGeometry(0.008, 0.008, 2.1));
-    const wireMat = this.track(new THREE.MeshStandardMaterial({ color: '#333' }));
-    for (const x of [-1.1, 1.1]) {
-      const w = new THREE.Mesh(wire, wireMat);
-      w.position.set(x, 3.8 + 1.05, -L + 0.32);
-      this.group.add(w);
+    if (roof === 'bulbs') {
+      // placa em dois postes atrás do fundo
+      const post = this.track(new THREE.CylinderGeometry(0.05, 0.06, y + 0.4, 8));
+      for (const x of [-1.2, 1.2]) {
+        const p = new THREE.Mesh(post, brown);
+        p.position.set(x, (y + 0.4) / 2, z - 0.08);
+        p.castShadow = true;
+        this.group.add(p);
+      }
+    } else {
+      const top = roof === 'tiles' ? 3.75 : roof === 'indoor' ? 7.2 : 5.6;
+      const len = top - (y + 0.38);
+      const wire = this.track(new THREE.CylinderGeometry(0.008, 0.008, len));
+      const wireMat = this.track(new THREE.MeshStandardMaterial({ color: '#333' }));
+      for (const x of [-1.1, 1.1]) {
+        const w = new THREE.Mesh(wire, wireMat);
+        w.position.set(x, y + 0.38 + len / 2, z - 0.03);
+        this.group.add(w);
+      }
     }
     this.setScore({ blue: 0, red: 0, round: 1, target: 12, training: false });
+  }
+
+  /** comunidade do interior: esteios e tesouras de madeira, telha de barro */
+  private buildTileRoof(): void {
+    const { length: L, width: W } = this.spec;
+    const postX = W / 2 + 1.35;
+    const eave = 3.75;
+    const ridge = 4.9;
+    const woodMat = this.track(new THREE.MeshStandardMaterial({ map: this.track(woodTexture('#6a4a2c')), roughness: 0.8 }));
+    const beamGeo = this.track(new THREE.BoxGeometry(1, 1, 1));
+    const mats: THREE.Matrix4[] = [];
+    const q = new THREE.Quaternion();
+    const beam = (a: THREE.Vector3, b: THREE.Vector3, w: number) => {
+      const dir = b.clone().sub(a);
+      const len = dir.length();
+      q.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+      mats.push(new THREE.Matrix4().compose(a.clone().add(b).multiplyScalar(0.5), q, new THREE.Vector3(w, len, w)));
+    };
+    const bays = Math.max(3, Math.round(L / 4));
+    const zA = 1.0;
+    const zB = -L - 1.0;
+    for (let i = 0; i <= bays; i++) {
+      const z = zA + (i / bays) * (zB - zA);
+      for (const sx of [-1, 1]) beam(new THREE.Vector3(sx * postX, 0, z), new THREE.Vector3(sx * postX, eave, z), 0.16);
+      beam(new THREE.Vector3(-postX - 0.6, eave - 0.25, z), new THREE.Vector3(0, ridge, z), 0.12);
+      beam(new THREE.Vector3(postX + 0.6, eave - 0.25, z), new THREE.Vector3(0, ridge, z), 0.12);
+      beam(new THREE.Vector3(-postX, eave, z), new THREE.Vector3(postX, eave, z), 0.11);
+    }
+    for (const sx of [-1, 1]) beam(new THREE.Vector3(sx * postX, eave, zA), new THREE.Vector3(sx * postX, eave, zB), 0.13);
+    beam(new THREE.Vector3(0, ridge, zA), new THREE.Vector3(0, ridge, zB), 0.13);
+    const inst = new THREE.InstancedMesh(beamGeo, woodMat, mats.length);
+    mats.forEach((m, i) => inst.setMatrixAt(i, m));
+    // a cobertura não projeta sombra na cancha (iluminação difusa de baixo do telhado)
+    inst.castShadow = false;
+    this.group.add(inst);
+    const tiles = this.track(tileTexture());
+    const run = Math.hypot(postX + 0.9, ridge - eave + 0.25);
+    tiles.repeat.set(run * 2.6, (zA - zB) * 2.6);
+    const tileMat = this.track(new THREE.MeshStandardMaterial({ map: tiles, side: THREE.DoubleSide, roughness: 0.85 }));
+    for (const sx of [-1, 1]) {
+      const m = new THREE.Mesh(this.track(new THREE.PlaneGeometry(run, zA - zB + 0.4)), tileMat);
+      m.rotation.order = 'ZXY';
+      m.rotation.x = -Math.PI / 2;
+      m.rotation.z = -sx * Math.atan2(ridge - eave + 0.25, postX + 0.9);
+      m.position.set((sx * (postX + 0.9)) / 2, (ridge + eave - 0.25) / 2 + 0.08, (zA + zB) / 2);
+      this.group.add(m);
+    }
+    // lâmpadas penduradas na cumeeira
+    this.hangingBulbs(
+      Array.from({ length: bays }, (_, i) => new THREE.Vector3(0, ridge - 0.5, zA + ((i + 0.5) / bays) * (zB - zA))),
+      ridge,
+    );
+  }
+
+  /** bar de esquina: postes de madeira e varal de lâmpadas em zigue-zague sobre a cancha */
+  private buildBulbs(): void {
+    const { length: L, width: W } = this.spec;
+    const poleX = W / 2 + 0.75;
+    const top = 4.6;
+    const woodMat = this.track(new THREE.MeshStandardMaterial({ map: this.track(woodTexture('#5a4330')), roughness: 0.85 }));
+    const poleGeo = this.track(new THREE.CylinderGeometry(0.07, 0.09, top, 8));
+    const n = Math.max(3, Math.round(L / 6));
+    const tops: THREE.Vector3[] = [];
+    for (let i = 0; i <= n; i++) {
+      const z = 0.6 - (i / n) * (L + 1.2);
+      // alterna o lado do poste: o fio cruza a cancha em zigue-zague
+      const sx = i % 2 === 0 ? -1 : 1;
+      for (const side of [-1, 1]) {
+        const p = new THREE.Mesh(poleGeo, woodMat);
+        p.position.set(side * poleX, top / 2, z);
+        p.castShadow = true;
+        this.group.add(p);
+      }
+      tops.push(new THREE.Vector3(sx * poleX, top - 0.15, z));
+    }
+    const bulbs: THREE.Vector3[] = [];
+    const wirePts: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = tops[i];
+      const b = tops[i + 1];
+      const segs = 14;
+      for (let k = 0; k < segs; k++) {
+        const p0 = a.clone().lerp(b, k / segs);
+        p0.y -= Math.sin((Math.PI * k) / segs) * 0.55;
+        const p1 = a.clone().lerp(b, (k + 1) / segs);
+        p1.y -= Math.sin((Math.PI * (k + 1)) / segs) * 0.55;
+        wirePts.push(p0.x, p0.y, p0.z, p1.x, p1.y, p1.z);
+        if (k > 0 && k % 2 === 0) bulbs.push(p0.clone().add(new THREE.Vector3(0, -0.12, 0)));
+      }
+    }
+    const wireGeo = this.track(new THREE.BufferGeometry());
+    wireGeo.setAttribute('position', new THREE.Float32BufferAttribute(wirePts, 3));
+    this.group.add(new THREE.LineSegments(wireGeo, this.track(new THREE.LineBasicMaterial({ color: '#1c1c1c' }))));
+    const bulbMat = this.track(new THREE.MeshStandardMaterial({ color: '#fff3c8', emissive: '#ffcf70', emissiveIntensity: 3 }));
+    const bulb = new THREE.InstancedMesh(this.track(new THREE.SphereGeometry(0.055, 10, 8)), bulbMat, bulbs.length);
+    bulbs.forEach((b, i) => bulb.setMatrixAt(i, new THREE.Matrix4().makeTranslation(b.x, b.y, b.z)));
+    this.group.add(bulb);
+    this.lampPositions.push(...bulbs);
+  }
+
+  /** ginásio: prédio fechado, paredes claras, luminárias e janelas altas */
+  private buildGym(): void {
+    const { length: L, width: W } = this.spec;
+    const hx = W / 2 + 4.5;
+    const z0 = 4.5;
+    const z1 = -L - 4.5;
+    const H = 7.2;
+    const wallMat = this.track(new THREE.MeshStandardMaterial({ map: this.track(concreteTexture()), color: '#e8e2d4', roughness: 0.95, side: THREE.BackSide }));
+    const box = new THREE.Mesh(this.track(new THREE.BoxGeometry(hx * 2, H, z0 - z1)), wallMat);
+    box.position.set(0, H / 2 - 0.02, (z0 + z1) / 2);
+    box.receiveShadow = true;
+    this.group.add(box);
+    // barrado azul nas quatro paredes (só painéis: uma caixa cobriria o piso)
+    const bandMat = this.track(new THREE.MeshStandardMaterial({ color: '#2f6f9e', roughness: 0.8 }));
+    const depth = z0 - z1;
+    for (const sx of [-1, 1]) {
+      const p = new THREE.Mesh(this.track(new THREE.PlaneGeometry(depth, 1.4)), bandMat);
+      p.position.set(sx * (hx - 0.03), 0.7, (z0 + z1) / 2);
+      p.rotation.y = (-sx * Math.PI) / 2;
+      this.group.add(p);
+    }
+    for (const [z, ry] of [
+      [z0 - 0.03, Math.PI],
+      [z1 + 0.03, 0],
+    ] as const) {
+      const p = new THREE.Mesh(this.track(new THREE.PlaneGeometry(hx * 2, 1.4)), bandMat);
+      p.position.set(0, 0.7, z);
+      p.rotation.y = ry;
+      this.group.add(p);
+    }
+    const winMat = this.track(new THREE.MeshStandardMaterial({ color: '#cfe6ff', emissive: '#bcdcff', emissiveIntensity: 0.9 }));
+    const winGeo = this.track(new THREE.PlaneGeometry(2.2, 1.1));
+    for (let z = z0 - 3; z > z1 + 2; z -= 4) {
+      for (const sx of [-1, 1]) {
+        const w = new THREE.Mesh(winGeo, winMat);
+        w.position.set(sx * (hx - 0.02), H - 1.5, z);
+        w.rotation.y = (-sx * Math.PI) / 2;
+        this.group.add(w);
+      }
+    }
+    const lampMat = this.track(new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#fffdf2', emissiveIntensity: 1.8 }));
+    const lampGeo = this.track(new THREE.BoxGeometry(0.25, 0.06, 1.4));
+    const rows: THREE.Matrix4[] = [];
+    for (let z = z0 - 2.5; z > z1 + 1; z -= 3.2) for (const x of [-2.6, 0, 2.6]) rows.push(new THREE.Matrix4().makeTranslation(x, H - 0.25, z));
+    const lamps = new THREE.InstancedMesh(lampGeo, lampMat, rows.length);
+    rows.forEach((m, i) => lamps.setMatrixAt(i, m));
+    this.group.add(lamps);
+    const banners: [number, string, string][] = [
+      [-1, 'TORNEIO MUNICIPAL DE BOCHA', '#c62828'],
+      [1, 'BOCHA É TRADIÇÃO', '#1d5fd1'],
+    ];
+    for (const [sx, text, color] of banners) {
+      const [c, ctx] = canvas(1024, 160);
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 1024, 160);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '800 92px "Barlow Condensed", system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 512, 84);
+      const t = this.track(new THREE.CanvasTexture(c));
+      t.colorSpace = THREE.SRGBColorSpace;
+      const banner = new THREE.Mesh(this.track(new THREE.PlaneGeometry(8, 1.25)), this.track(new THREE.MeshStandardMaterial({ map: t, roughness: 0.8 })));
+      banner.position.set(sx * (hx - 0.03), 3.6, -L / 2);
+      banner.rotation.y = (-sx * Math.PI) / 2;
+      this.group.add(banner);
+    }
+  }
+
+  private hangingBulbs(points: THREE.Vector3[], top: number): void {
+    const bulbMat = this.track(new THREE.MeshStandardMaterial({ color: '#fff3c8', emissive: '#ffd27a', emissiveIntensity: 2.6 }));
+    const cord = this.track(new THREE.MeshStandardMaterial({ color: '#222' }));
+    const bulbGeo = this.track(new THREE.SphereGeometry(0.07, 10, 8));
+    for (const p of points) {
+      const b = new THREE.Mesh(bulbGeo, bulbMat);
+      b.position.copy(p);
+      const len = top - p.y;
+      const c = new THREE.Mesh(this.track(new THREE.CylinderGeometry(0.006, 0.006, len)), cord);
+      c.position.set(p.x, p.y + len / 2, p.z);
+      this.group.add(b, c);
+      this.lampPositions.push(p.clone());
+    }
   }
 
   setScore(s: ScoreInfo): void {
@@ -308,7 +519,7 @@ export class CourtView {
     ctx.textAlign = 'center';
     ctx.font = '700 46px "Barlow Condensed", system-ui, sans-serif';
     ctx.fillStyle = '#f4e9c8';
-    ctx.fillText(s.training ? 'TREINO LIVRE' : `CLUBE DE BOCHA · RODADA ${s.round} · ATÉ ${s.target}`, w / 2, 52);
+    ctx.fillText(s.training ? `${this.style.plaque} · TREINO LIVRE` : `${this.style.plaque} · RODADA ${s.round} · ATÉ ${s.target}`, w / 2, 52);
     if (!s.training) {
       ctx.font = '800 120px "Barlow Condensed", system-ui, sans-serif';
       ctx.fillStyle = '#6fb0ff';
