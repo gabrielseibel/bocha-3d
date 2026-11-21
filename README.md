@@ -20,10 +20,14 @@ e pode deslocar o bolim.
 - **Física própria e determinística** (480 Hz): parábola com arrasto do ar, impacto no
   saibro, deslizamento → rolamento, colisões entre bolas em 3D (inclusive **tiro de ar**),
   tabelas laterais e de fundo.
-- **Quatro canchas**: Sociedade Recreativa (saibro coberto), Comunidade do Interior (terra
+- **Cinco canchas**: Sociedade Recreativa (saibro coberto), Comunidade do Interior (terra
   batida, telhado de barro, capela e araucárias), Bar de Esquina (noite, areia fina, varal de
-  lâmpadas, mesas de bar) e Ginásio (carpete sintético, bola corre muito). Cada piso tem física
-  própria.
+  lâmpadas, mesas de bar), Ginásio do Clube (carpete cinza, paredes de carpete verde com faixa
+  vermelha, linhas amarelas, patrocinadores) e Salão da Comunidade (cimento queimado, ripas
+  brancas, placar de números). Cada piso tem física própria.
+- **Personagens feitos no Blender** (`tools/blender/make_people.py`): 6 tipos de corpo e cabeça
+  com esqueleto, roupas e pele variadas; torcida apoiada no peitoril com cerveja e chimarrão,
+  jogadores esperando no fundo e o arremessador animado (ponto agachado, tiro com corrida).
 - **Tabelada**: a bola que bate na lateral volta rolando para o meio.
 - **Mira pela dificuldade**: no fácil/treino mostra o caminho inteiro até a bola fantasma onde
   ela para; no médio e em dois jogadores só o começo; no difícil só a direção (configurável).
@@ -70,6 +74,8 @@ npm run dev        # http://localhost:5191
 npm test           # física, regras, IA e partida (Vitest)
 npm run build      # build estático em dist/
 npm run calibrate  # tabela de calibração da física (tools/out/)
+# personagens (Blender 4+/5): gera public/models/people.glb
+blender -b -P tools/blender/make_people.py -- public/models/people.glb
 ```
 
 Tecnologias: TypeScript, Three.js, Vite, Web Worker (IA), Web Audio. Sem servidor nem banco

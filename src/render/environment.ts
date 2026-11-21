@@ -122,7 +122,11 @@ export class Environment {
         break;
       case 'ginasio':
         this.bleachers(spec);
-        this.benches(spec);
+        this.furniture(spec, 1, ['#f4f4f2'], ['#1f2023']);
+        break;
+      case 'salao':
+        this.furniture(spec, -1, ['#f4f4f2', '#f4f4f2', '#d4302b'], ['#f4f4f2', '#2f6f9e']);
+        this.furniture(spec, 1, ['#f4f4f2'], ['#f4f4f2', '#2f6f9e']);
         break;
     }
   }
@@ -410,6 +414,41 @@ export class Environment {
       for (let k = 0; k < 2; k++) if (rng.next() < 0.75) house.add(this.box(0.05, 0.9, 1, win, 2.52, h * 0.55, (k - 0.5) * w * 0.5));
       house.position.set(x0 - 10, 0, z);
       this.add(house);
+    }
+  }
+
+  /** mesas e cadeiras de plástico atrás da torcida (como nas fotos dos salões) */
+  private furniture(spec: CourtSpec, side: number, tableColors: string[], chairColors: string[]): void {
+    const { length: L, width: W } = spec;
+    const rng = new Rng(side > 0 ? 11 : 12);
+    const x = side * (W / 2 + 2.25);
+    for (let z = -2.5; z > -L + 2; z -= rng.range(3.2, 4.6)) {
+      const tm = new THREE.MeshStandardMaterial({ color: rng.pick(tableColors), roughness: 0.55 });
+      const g = new THREE.Group();
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.04, 20), tm);
+      top.position.y = 0.72;
+      g.add(top);
+      for (let k = 0; k < 4; k++) {
+        const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
+        g.add(this.box(0.035, 0.72, 0.035, tm, Math.cos(a) * 0.3, 0.36, Math.sin(a) * 0.3));
+      }
+      for (let k = 0; k < 3; k++) {
+        const cm = new THREE.MeshStandardMaterial({ color: rng.pick(chairColors), roughness: 0.55 });
+        const ch = new THREE.Group();
+        ch.add(this.box(0.44, 0.04, 0.42, cm, 0, 0.44, 0), this.box(0.44, 0.42, 0.04, cm, 0, 0.66, -0.2));
+        for (const [dx, dz] of [[-0.19, -0.18], [0.19, -0.18], [-0.19, 0.18], [0.19, 0.18]]) ch.add(this.box(0.03, 0.44, 0.03, cm, dx, 0.22, dz));
+        const a = (k / 3) * Math.PI * 2 + rng.range(-0.3, 0.3);
+        ch.position.set(Math.cos(a) * 0.68, 0, Math.sin(a) * 0.68);
+        ch.rotation.y = -a - Math.PI / 2;
+        g.add(ch);
+      }
+      if (rng.next() < 0.7) {
+        const b = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.28, 10), new THREE.MeshStandardMaterial({ color: '#4a2a10', roughness: 0.2 }));
+        b.position.set(rng.range(-0.15, 0.15), 0.88, rng.range(-0.15, 0.15));
+        g.add(b);
+      }
+      g.position.set(x + rng.range(-0.2, 0.2), 0, z);
+      this.add(g);
     }
   }
 

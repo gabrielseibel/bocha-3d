@@ -6,13 +6,24 @@ import '@fontsource/barlow-condensed/800.css';
 import './style.css';
 import { Game } from './game/game';
 import { loadSettings } from './game/settings';
+import { CharacterKit } from './render/characters';
 
-function boot(): void {
+async function boot(): Promise<void> {
   const canvas = document.getElementById('gl') as HTMLCanvasElement;
   const settings = loadSettings();
+  const text = document.querySelector('.loading-text');
+  if (text) text.textContent = 'Chamando a turma da bocha…';
+  let kit: CharacterKit | null = null;
+  try {
+    kit = await CharacterKit.load(`${import.meta.env.BASE_URL}models/people.glb`);
+  } catch (err) {
+    console.warn('personagens não carregaram; usando bonecos simples', err);
+  }
+  if (text) text.textContent = 'Preparando a cancha…';
+  await new Promise((r) => setTimeout(r, 20));
   let game: Game;
   try {
-    game = new Game(canvas, settings);
+    game = new Game(canvas, settings, kit);
   } catch (err) {
     console.error(err);
     const t = document.querySelector('.loading-text');
@@ -26,4 +37,4 @@ function boot(): void {
 }
 
 // dá tempo da tela de carregamento aparecer antes de gerar as texturas
-setTimeout(boot, 30);
+setTimeout(() => void boot(), 30);

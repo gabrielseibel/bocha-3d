@@ -12,8 +12,10 @@ import { CourtView } from '../render/court';
 import { Dust, Marks, Trail } from '../render/effects';
 import { Environment } from '../render/environment';
 import { Crowd, Thrower } from '../render/people';
+import { KitCrowd } from '../render/folks';
+import type { CharacterKit } from '../render/characters';
 import { Stage, type PipRect, type Quality } from '../render/stage';
-import { carpetTextures, clayTextures, type ClayTextures } from '../render/textures';
+import { carpetTextures, clayTextures, concreteFloorTextures, type ClayTextures } from '../render/textures';
 import { VENUE_STYLES, type VenueStyle } from '../render/venueStyle';
 import { venueById } from './venues';
 import { Hud, byId, type AimField, type TrainingAction } from '../ui/hud';
@@ -50,8 +52,8 @@ export class Game {
   private courtView: CourtView | null = null;
   private court: CourtSpec;
   private readonly env: Environment;
-  private readonly crowd = new Crowd();
-  private readonly thrower = new Thrower();
+  private readonly crowd: Crowd | KitCrowd;
+  private readonly thrower: Thrower;
   private readonly balls: BallViews;
   private readonly dust = new Dust();
   private readonly marks = new Marks();
@@ -97,7 +99,10 @@ export class Game {
   private menuWorld: World;
   private lastMode: Mode = 'cpu';
 
-  constructor(canvas: HTMLCanvasElement, settings: Settings) {
+  constructor(canvas: HTMLCanvasElement, settings: Settings, kit: CharacterKit | null = null) {
+    // personagens do Blender (torcida e jogador); sem eles, bonecos simples
+    this.crowd = kit ? new KitCrowd(kit) : new Crowd();
+    this.thrower = new Thrower(kit);
     this.settings = settings;
     this.qualityLevel = this.resolveQuality();
     this.stage = new Stage(canvas, this.qualityLevel);
@@ -202,7 +207,12 @@ export class Game {
     let t = this.floors.get(style.id);
     if (!t) {
       const size = this.qualityLevel === 'low' ? 256 : 512;
-      t = style.floor.kind === 'carpet' ? carpetTextures(size, style.floor.color) : clayTextures(size, style.floor.color);
+      t =
+        style.floor.kind === 'carpet'
+          ? carpetTextures(size, style.floor.color)
+          : style.floor.kind === 'concrete'
+            ? concreteFloorTextures(size, style.floor.color)
+            : clayTextures(size, style.floor.color);
       this.floors.set(style.id, t);
     }
     return t;
@@ -765,13 +775,19 @@ export class Game {
 
   private watchFps(dt: number): void {
     if (this.settings.quality !== 'auto' || this.state !== 'play' || this.qualityLevel === 'low') return;
+    // quadros travados (aba oculta, painel em segundo plano, alerta do sistema) não contam
+    if (document.visibilityState !== 'visible' || dt > 0.1) {
+      this.fps.acc = 0;
+      this.fps.frames = 0;
+      return;
+    }
     this.fps.acc += dt;
     this.fps.frames++;
     if (this.fps.acc >= 3) {
       const fps = this.fps.frames / this.fps.acc;
       this.fps.acc = 0;
       this.fps.frames = 0;
-      if (++this.fps.checks >= 2 && fps < 38) {
+      if (++this.fps.checks >= 3 && fps < 34) {
         this.qualityLevel = this.qualityLevel === 'high' ? 'medium' : 'low';
         this.stage.setQuality(this.qualityLevel);
         this.onResize();

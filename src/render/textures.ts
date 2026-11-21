@@ -198,6 +198,44 @@ export function carpetTextures(size: number, base: [number, number, number] = [4
   return { map: toTexture(c, true, true), normal: toTexture(normal, false, true) };
 }
 
+/** cimento queimado: liso, manchado, com marcas da desempenadeira */
+export function concreteFloorTextures(size: number, base: [number, number, number] = [206, 204, 197]): ClayTextures {
+  const rng = new Rng(61);
+  const n = fbm(71, 4, 5);
+  const [c, ctx] = canvas(size, size);
+  const img = ctx.createImageData(size, size);
+  const height = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const a = n(x / size, y / size);
+      const k = 0.9 + 0.16 * a;
+      const i = (y * size + x) * 4;
+      img.data[i] = Math.min(255, base[0] * k);
+      img.data[i + 1] = Math.min(255, base[1] * k);
+      img.data[i + 2] = Math.min(255, base[2] * k);
+      img.data[i + 3] = 255;
+      height[y * size + x] = a * 0.3;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  ctx.globalAlpha = 0.05;
+  for (let i = 0; i < 40; i++) {
+    ctx.strokeStyle = rng.next() < 0.5 ? '#6f6c66' : '#ffffff';
+    ctx.lineWidth = rng.range(2, 6);
+    ctx.beginPath();
+    ctx.arc(rng.range(0, size), rng.range(0, size), rng.range(size * 0.1, size * 0.35), rng.range(0, 3), rng.range(3, 6));
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 0.25;
+  for (let i = 0; i < 1500; i++) {
+    ctx.fillStyle = rng.next() < 0.5 ? '#8c8880' : '#f4f2ec';
+    ctx.fillRect(rng.range(0, size), rng.range(0, size), 1, 1);
+  }
+  ctx.globalAlpha = 1;
+  const normal = normalFromHeight(height, size, 0.6);
+  return { map: toTexture(c, true, true), normal: toTexture(normal, false, true) };
+}
+
 /** variação de grande escala da cancha inteira (sem repetição): cantos mais escuros, faixa central batida */
 export function clayMacroTexture(): THREE.CanvasTexture {
   const w = 64;
@@ -367,6 +405,29 @@ export function ballTexture(base: string, groove: string, light: string, rings: 
   const [c, ctx] = canvas(w, h);
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, w, h);
+  // resina marmorizada: veios ondulados claros e escuros (como as bolas das fotos)
+  const marble = fbm(base.length * 7 + rings, 4, 4);
+  const img = ctx.getImageData(0, 0, w, h);
+  const bc = new THREE.Color(base);
+  const lc = new THREE.Color(light);
+  const gc = new THREE.Color(groove);
+  const tmp = new THREE.Color();
+  const srgb = { r: 0, g: 0, b: 0 };
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const m = marble(x / w, y / h);
+      const vein = Math.sin((x / w) * 12 + m * 14 + (y / h) * 5);
+      tmp.copy(bc);
+      if (vein > 0.55) tmp.lerp(lc, (vein - 0.55) * 1.6);
+      else if (vein < -0.7) tmp.lerp(gc, (-0.7 - vein) * 1.2);
+      const i = (y * w + x) * 4;
+      tmp.getRGB(srgb, THREE.SRGBColorSpace);
+      img.data[i] = srgb.r * 255;
+      img.data[i + 1] = srgb.g * 255;
+      img.data[i + 2] = srgb.b * 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
   // veios suaves da resina
   for (let i = 0; i < 26; i++) {
     ctx.globalAlpha = 0.07;

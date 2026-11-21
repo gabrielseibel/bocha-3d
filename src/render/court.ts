@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { CourtSpec } from '../config';
 import { Rng } from '../util/rng';
-import { canvas, clayMacroTexture, concreteTexture, plaqueCanvas, roofTexture, tileTexture, woodTexture, type ClayTextures } from './textures';
+import { brickTexture, canvas, carpetTextures, clayMacroTexture, concreteTexture, plaqueCanvas, roofTexture, tileTexture, woodTexture, type ClayTextures } from './textures';
 import type { VenueStyle } from './venueStyle';
 
 export interface ScoreInfo {
@@ -33,6 +33,7 @@ export class CourtView {
     if (style.roof === 'steel') this.buildStructure();
     else if (style.roof === 'tiles') this.buildTileRoof();
     else if (style.roof === 'bulbs') this.buildBulbs();
+    else if (style.roof === 'hall') this.buildHall();
     else this.buildGym();
     const [, ctx, tex] = plaqueCanvas();
     this.plaqueCtx = ctx;
@@ -129,6 +130,19 @@ export class CourtView {
     make(foulLine, false, 0.95, 0.05);
     make(bolimMin, true, 0.45, 0.035);
     make(bolimMax, true, 0.45, 0.035);
+    // linhas pintadas a cada poucos metros, como nas canchas de salão
+    const lines = this.style.lines;
+    if (lines) {
+      const geo = this.track(new THREE.PlaneGeometry(W - 0.02, 0.03).rotateX(-Math.PI / 2));
+      const mat = this.track(new THREE.MeshStandardMaterial({ color: lines.color, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2 }));
+      for (let d = foulLine + lines.every; d < this.spec.length - 0.5; d += lines.every) {
+        if (Math.abs(d - bolimMin) < 0.3 || Math.abs(d - bolimMax) < 0.3) continue;
+        const m = new THREE.Mesh(geo, mat);
+        m.position.set(0, 0.0015, -d);
+        m.receiveShadow = true;
+        this.group.add(m);
+      }
+    }
   }
 
   private buildWalls(): void {
@@ -138,10 +152,16 @@ export class CourtView {
     const st = this.style;
     const concrete = this.track(concreteTexture());
     const boardMat = this.track(new THREE.MeshStandardMaterial({ map: this.track(woodTexture(st.board)), roughness: 0.7 }));
-    const concreteMat =
-      st.wall.kind === 'wood'
-        ? this.track(new THREE.MeshStandardMaterial({ map: this.track(woodTexture(st.wall.color)), roughness: 0.75 }))
-        : this.track(new THREE.MeshStandardMaterial({ map: concrete, color: st.wall.color, roughness: 0.92 }));
+    let concreteMat: THREE.MeshStandardMaterial;
+    if (st.wall.kind === 'wood') concreteMat = this.track(new THREE.MeshStandardMaterial({ map: this.track(woodTexture(st.wall.color)), roughness: 0.75 }));
+    else if (st.wall.kind === 'carpet') {
+      // paredes forradas de carpete (salões de carpete)
+      const c = new THREE.Color(st.wall.color);
+      const t = carpetTextures(128, [Math.round(c.r * 255), Math.round(c.g * 255), Math.round(c.b * 255)].map((v) => Math.round(Math.pow(v / 255, 1 / 2.2) * 255)) as [number, number, number]);
+      this.track(t.map);
+      this.track(t.normal);
+      concreteMat = this.track(new THREE.MeshStandardMaterial({ map: t.map, normalMap: t.normal, roughness: 1 }));
+    } else concreteMat = this.track(new THREE.MeshStandardMaterial({ map: concrete, color: st.wall.color, roughness: 0.92 }));
     const capMat =
       st.cap.kind === 'wood'
         ? this.track(new THREE.MeshStandardMaterial({ map: this.track(woodTexture(st.cap.color)), roughness: 0.65 }))
@@ -160,15 +180,34 @@ export class CourtView {
       this.group.add(m);
       return m;
     };
+    const slats = st.wall.kind === 'slats';
+    const low = 0.5;
     for (const side of [-1, 1]) {
       const x = side * (W / 2 + T / 2);
       box(T, board, L + 2 * T, boardMat, x, board / 2, -L / 2, L / 2.5);
-      box(T, H - board, L + 2 * T, concreteMat, x, board + (H - board) / 2, -L / 2, L / 3);
+      if (slats) {
+        // mureta baixa + balaustrada de ripas de madeira pintadas de branco
+        box(T, low - board, L + 2 * T, concreteMat, x, board + (low - board) / 2, -L / 2, L / 3);
+        box(T * 0.6, 0.06, L + 2 * T, capMat, x, low + 0.03, -L / 2, L / 4);
+        const slatGeo = this.track(new THREE.BoxGeometry(0.03, H - low - 0.06, 0.07));
+        const n = Math.floor((L + 2 * T) / 0.13);
+        const inst = new THREE.InstancedMesh(slatGeo, this.track(new THREE.MeshStandardMaterial({ color: '#f4f2ec', roughness: 0.8 })), n);
+        const mtx = new THREE.Matrix4();
+        for (let i = 0; i < n; i++) inst.setMatrixAt(i, mtx.makeTranslation(x, low + 0.06 + (H - low - 0.06) / 2, T - i * 0.13));
+        inst.castShadow = true;
+        this.group.add(inst);
+      } else box(T, H - board, L + 2 * T, concreteMat, x, board + (H - board) / 2, -L / 2, L / 3);
       box(T + 0.12, 0.05, L + 2 * T + 0.12, capMat, side * (W / 2 + T / 2 + 0.03), H + 0.025, -L / 2, L / 4);
     }
-    // fundo
-    box(W + 2 * T, 0.42, T, boardMat, 0, 0.21, -L - T / 2, 2);
-    box(W + 2 * T, HE - 0.42, T, concreteMat, 0, 0.42 + (HE - 0.42) / 2, -L - T / 2, 2);
+    // fundo (nos salões de carpete: acolchoado escuro com faixa vermelha)
+    if (st.darkBack) {
+      const pad = this.track(new THREE.MeshStandardMaterial({ color: '#1e2226', roughness: 1 }));
+      box(W + 2 * T, 0.18, T, boardMat, 0, 0.09, -L - T / 2, 2);
+      box(W + 2 * T, HE - 0.18, T, pad, 0, 0.18 + (HE - 0.18) / 2, -L - T / 2, 2);
+    } else {
+      box(W + 2 * T, 0.42, T, boardMat, 0, 0.21, -L - T / 2, 2);
+      box(W + 2 * T, HE - 0.42, T, concreteMat, 0, 0.42 + (HE - 0.42) / 2, -L - T / 2, 2);
+    }
     box(W + 2 * T + 0.12, 0.05, T + 0.12, capMat, 0, HE + 0.025, -L - T / 2 - 0.03, 2);
     // cabeceira de arremesso (baixa)
     box(W + 2 * T, 0.3, T, boardMat, 0, 0.15, T / 2, 2);
@@ -290,7 +329,7 @@ export class CourtView {
   private buildPlaque(): void {
     const { length: L } = this.spec;
     const roof = this.style.roof;
-    const y = roof === 'tiles' ? 2.75 : roof === 'bulbs' ? 2.05 : roof === 'indoor' ? 3.7 : 3.45;
+    const y = roof === 'tiles' ? 2.75 : roof === 'bulbs' ? 2.05 : roof === 'indoor' ? 3.7 : roof === 'hall' ? 3.1 : 3.45;
     const z = roof === 'bulbs' ? -L - 0.45 : -L + 0.35;
     const geo = this.track(new THREE.PlaneGeometry(2.6, 0.65));
     const mat = this.track(new THREE.MeshStandardMaterial({ map: this.plaqueTex, roughness: 0.6, emissive: '#ffffff', emissiveMap: this.plaqueTex, emissiveIntensity: 0.35 }));
@@ -311,7 +350,7 @@ export class CourtView {
         this.group.add(p);
       }
     } else {
-      const top = roof === 'tiles' ? 3.75 : roof === 'indoor' ? 7.2 : 5.6;
+      const top = roof === 'tiles' ? 3.75 : roof === 'indoor' ? 7.2 : roof === 'hall' ? 4.65 : 5.6;
       const len = top - (y + 0.38);
       const wire = this.track(new THREE.CylinderGeometry(0.008, 0.008, len));
       const wireMat = this.track(new THREE.MeshStandardMaterial({ color: '#333' }));
@@ -429,7 +468,9 @@ export class CourtView {
     const z0 = 4.5;
     const z1 = -L - 4.5;
     const H = 7.2;
-    const wallMat = this.track(new THREE.MeshStandardMaterial({ map: this.track(concreteTexture()), color: '#e8e2d4', roughness: 0.95, side: THREE.BackSide }));
+    const brick = this.track(brickTexture());
+    brick.repeat.set((z0 - z1) / 2.4, H / 1.2);
+    const wallMat = this.track(new THREE.MeshStandardMaterial({ map: brick, roughness: 0.95, side: THREE.BackSide }));
     const box = new THREE.Mesh(this.track(new THREE.BoxGeometry(hx * 2, H, z0 - z1)), wallMat);
     box.position.set(0, H / 2 - 0.02, (z0 + z1) / 2);
     box.receiveShadow = true;
@@ -469,6 +510,34 @@ export class CourtView {
     const lamps = new THREE.InstancedMesh(lampGeo, lampMat, rows.length);
     rows.forEach((m, i) => lamps.setMatrixAt(i, m));
     this.group.add(lamps);
+    // faixas de patrocinadores da cidade (nomes fictícios)
+    const sponsors: [string, string][] = [
+      ['MERCADO BOA VISTA', '#1d5fd1'],
+      ['AGROPECUÁRIA SÃO JOSÉ', '#2e7d32'],
+      ['MATERIAIS DE CONSTRUÇÃO GASPAR', '#c62828'],
+      ['FARMÁCIA CENTRAL', '#f9a825'],
+      ['AUTO PEÇAS IRMÃOS', '#37474f'],
+      ['PADARIA PÃO QUENTE', '#8d4b20'],
+    ];
+    sponsors.forEach(([text, color], i) => {
+      const [c, ctx] = canvas(512, 160);
+      ctx.fillStyle = '#fafafa';
+      ctx.fillRect(0, 0, 512, 160);
+      ctx.fillStyle = color;
+      ctx.fillRect(8, 8, 496, 144);
+      ctx.fillStyle = color === '#f9a825' ? '#1d1d1d' : '#ffffff';
+      ctx.font = '800 52px "Barlow Condensed", system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 256, 84, 480);
+      const t = this.track(new THREE.CanvasTexture(c));
+      t.colorSpace = THREE.SRGBColorSpace;
+      const sx = i % 2 ? 1 : -1;
+      const ad = new THREE.Mesh(this.track(new THREE.PlaneGeometry(2.6, 0.8)), this.track(new THREE.MeshStandardMaterial({ map: t, roughness: 0.8 })));
+      ad.position.set(sx * (hx - 0.04), 2.9, -2 - Math.floor(i / 2) * (L / 3.2));
+      ad.rotation.y = (-sx * Math.PI) / 2;
+      this.group.add(ad);
+    });
     const banners: [number, string, string][] = [
       [-1, 'TORNEIO MUNICIPAL DE BOCHA', '#c62828'],
       [1, 'BOCHA É TRADIÇÃO', '#1d5fd1'],
@@ -485,9 +554,75 @@ export class CourtView {
       const t = this.track(new THREE.CanvasTexture(c));
       t.colorSpace = THREE.SRGBColorSpace;
       const banner = new THREE.Mesh(this.track(new THREE.PlaneGeometry(8, 1.25)), this.track(new THREE.MeshStandardMaterial({ map: t, roughness: 0.8 })));
-      banner.position.set(sx * (hx - 0.03), 3.6, -L / 2);
+      banner.position.set(sx * (hx - 0.03), 4.6, -L / 2);
       banner.rotation.y = (-sx * Math.PI) / 2;
       this.group.add(banner);
+    }
+  }
+
+  /** salão da comunidade: paredes brancas, fundo de tijolo, vigas de madeira e lâmpadas tubulares */
+  private buildHall(): void {
+    const { length: L, width: W } = this.spec;
+    const hx = W / 2 + 3.6;
+    const z0 = 4;
+    const z1 = -L - 3.2;
+    const H = 4.9;
+    const white = this.track(new THREE.MeshStandardMaterial({ color: '#f3f0e8', roughness: 0.95, side: THREE.BackSide }));
+    const room = new THREE.Mesh(this.track(new THREE.BoxGeometry(hx * 2, H, z0 - z1)), white);
+    room.position.set(0, H / 2 - 0.02, (z0 + z1) / 2);
+    room.receiveShadow = true;
+    this.group.add(room);
+    // parede do fundo de tijolo à vista
+    const brick = this.track(brickTexture());
+    brick.repeat.set(hx / 1.2, H / 1.2);
+    const back = new THREE.Mesh(this.track(new THREE.PlaneGeometry(hx * 2, H)), this.track(new THREE.MeshStandardMaterial({ map: brick, roughness: 0.95 })));
+    back.position.set(0, H / 2, z1 + 0.02);
+    this.group.add(back);
+    // vigas de madeira e telha vista
+    const wood = this.track(new THREE.MeshStandardMaterial({ map: this.track(woodTexture('#9a7046')), roughness: 0.8 }));
+    const beamGeo = this.track(new THREE.BoxGeometry(hx * 2, 0.22, 0.14));
+    const beams: THREE.Matrix4[] = [];
+    for (let z = z0 - 1; z > z1; z -= 2.2) beams.push(new THREE.Matrix4().makeTranslation(0, H - 0.25, z));
+    const inst = new THREE.InstancedMesh(beamGeo, wood, beams.length);
+    beams.forEach((m, i) => inst.setMatrixAt(i, m));
+    this.group.add(inst);
+    // janelas e lâmpadas tubulares
+    const winMat = this.track(new THREE.MeshStandardMaterial({ color: '#d9ecff', emissive: '#c8e2ff', emissiveIntensity: 0.8 }));
+    const frame = this.track(new THREE.MeshStandardMaterial({ color: '#5a3f2a', roughness: 0.7 }));
+    for (let z = z0 - 3; z > z1 + 2; z -= 5) {
+      for (const sx of [-1, 1]) {
+        const f = new THREE.Mesh(this.track(new THREE.PlaneGeometry(1.5, 1.3)), frame);
+        f.position.set(sx * (hx - 0.03), 2.4, z);
+        f.rotation.y = (-sx * Math.PI) / 2;
+        const w = new THREE.Mesh(this.track(new THREE.PlaneGeometry(1.3, 1.1)), winMat);
+        w.position.set(sx * (hx - 0.04), 2.4, z);
+        w.rotation.y = (-sx * Math.PI) / 2;
+        this.group.add(f, w);
+      }
+    }
+    const lampMat = this.track(new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#fffdf2', emissiveIntensity: 1.8 }));
+    const tube = this.track(new THREE.BoxGeometry(0.08, 0.05, 1.2));
+    const tubes: THREE.Matrix4[] = [];
+    for (let z = z0 - 2; z > z1 + 1; z -= 2.2) for (const x of [-0.7, 0.7]) tubes.push(new THREE.Matrix4().makeTranslation(x, H - 0.4, z));
+    const lamps = new THREE.InstancedMesh(tube, lampMat, tubes.length);
+    tubes.forEach((m, i) => lamps.setMatrixAt(i, m));
+    this.group.add(lamps);
+    // prateleira de troféus na parede
+    const shelf = this.track(new THREE.MeshStandardMaterial({ color: '#7a5532', roughness: 0.7 }));
+    const gold = this.track(new THREE.MeshStandardMaterial({ color: '#e3b23c', roughness: 0.25, metalness: 0.9 }));
+    for (let k = 0; k < 2; k++) {
+      const s = new THREE.Mesh(this.track(new THREE.BoxGeometry(0.3, 0.04, 1.4)), shelf);
+      s.position.set(hx - 0.16, 2.2 + k * 0.6, -L * 0.35);
+      this.group.add(s);
+      for (let i = 0; i < 4; i++) {
+        const cup = new THREE.Group();
+        cup.add(new THREE.Mesh(this.track(new THREE.CylinderGeometry(0.06, 0.04, 0.14, 10).translate(0, 0.17, 0)), gold));
+        cup.add(new THREE.Mesh(this.track(new THREE.CylinderGeometry(0.015, 0.015, 0.1).translate(0, 0.06, 0)), gold));
+        cup.add(new THREE.Mesh(this.track(new THREE.BoxGeometry(0.1, 0.03, 0.1)), shelf));
+        cup.position.set(hx - 0.18, 2.24 + k * 0.6, -L * 0.35 - 0.5 + i * 0.33);
+        cup.scale.setScalar(0.8 + ((i + k) % 3) * 0.35);
+        this.group.add(cup);
+      }
     }
   }
 
@@ -507,6 +642,10 @@ export class CourtView {
   }
 
   setScore(s: ScoreInfo): void {
+    if (this.style.scoreboard === 'numbers' && !s.training) {
+      this.drawNumberBoard(s);
+      return;
+    }
     const ctx = this.plaqueCtx;
     const w = 1024;
     const h = 256;
@@ -539,6 +678,48 @@ export class CourtView {
       ctx.fillStyle = '#f4e9c8';
       ctx.fillText('BOA BOCHA!', w / 2, 160);
     }
+    this.plaqueTex.needsUpdate = true;
+  }
+
+  /** quadro de placar das canchas de clube: uma fileira de números por equipe, marcando os pontos */
+  private drawNumberBoard(s: ScoreInfo): void {
+    const ctx = this.plaqueCtx;
+    const w = 1024;
+    const h = 256;
+    ctx.fillStyle = '#f3efe2';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#1d1d1d';
+    ctx.font = '700 34px "Barlow Condensed", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${this.style.plaque} · RODADA ${s.round}`, w / 2, 26);
+    const n = Math.min(21, s.target);
+    const x0 = 120;
+    const cw = (w - x0 - 20) / n;
+    const rows: [string, number, string][] = [
+      ['AZUL', s.blue, '#1d5fd1'],
+      ['VERM.', s.red, '#c62828'],
+    ];
+    rows.forEach(([name, pts, color], r) => {
+      const y = 60 + r * 96;
+      ctx.fillStyle = color;
+      ctx.fillRect(14, y, x0 - 24, 84);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '800 36px "Barlow Condensed", system-ui, sans-serif';
+      ctx.fillText(name, 14 + (x0 - 24) / 2, y + 42);
+      for (let i = 0; i < n; i++) {
+        const x = x0 + i * cw;
+        const on = i < pts;
+        ctx.fillStyle = on ? color : '#ffffff';
+        ctx.fillRect(x + 2, y, cw - 4, 84);
+        ctx.strokeStyle = '#2b2b2b';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 2, y, cw - 4, 84);
+        ctx.fillStyle = on ? '#ffffff' : '#2b2b2b';
+        ctx.font = `700 ${cw > 44 ? 34 : 26}px "Barlow Condensed", system-ui, sans-serif`;
+        ctx.fillText(String(i + 1).padStart(2, '0'), x + cw / 2, y + 42);
+      }
+    });
     this.plaqueTex.needsUpdate = true;
   }
 

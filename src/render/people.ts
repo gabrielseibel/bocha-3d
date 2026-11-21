@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { CourtSpec } from '../config';
 import type { Team } from '../physics/world';
 import type { ShotStyle } from '../physics/shot';
+import { randomLook, type Character, type CharacterKit } from './characters';
 import { clamp, damp, easeInOutSine, lerp } from '../util/math';
 import { Rng } from '../util/rng';
 
@@ -194,8 +195,27 @@ export class Thrower {
   /** comprimento do braço até o centro da bola */
   private readonly armLen = 0.7;
   private relArm = 0.6;
+  /** personagens do Blender (um por equipe); sem eles usa o boneco de cápsulas */
+  private chars: Record<Team, Character> | null = null;
+  private team: Team = 'blue';
 
-  constructor() {
+  constructor(kit: CharacterKit | null = null) {
+    if (kit) {
+      const rng = new Rng(77);
+      this.chars = {
+        blue: kit.create(kit.variantIndex('regular_cap'), { ...randomLook(rng, TEAM_SHIRT.blue), cap: '#f2f2f2', pants: '#f1f1ee', shin: '#f1f1ee', shoes: '#25262a', forearm: '#e0ad86', skin: '#e0ad86' }),
+        red: kit.create(kit.variantIndex('belly_bald'), { ...randomLook(rng, TEAM_SHIRT.red), pants: '#2f3c55', shin: '#2f3c55', shoes: '#f0efea', forearm: '#c8875c', skin: '#c8875c', hair: '#c9c7c2' }),
+      };
+      for (const t of ['blue', 'red'] as Team[]) {
+        const c = this.chars[t];
+        c.root.rotation.y = Math.PI; // o personagem olha para +z; o jogador olha a cancha (-z)
+        this.root.add(c.root);
+      }
+      this.attachBall();
+      this.setTeam('blue');
+      this.applyPose();
+      return;
+    }
     const skin = new THREE.MeshStandardMaterial({ color: '#d9a37e', roughness: 0.75 });
     const pants = new THREE.MeshStandardMaterial({ color: '#f1f1ee', roughness: 0.85 });
     const shoes = new THREE.MeshStandardMaterial({ color: '#202124', roughness: 0.6 });
@@ -264,12 +284,57 @@ export class Thrower {
   }
 
   setTeam(team: Team): void {
+    this.team = team;
+    if (this.chars) {
+      this.chars.blue.root.visible = team === 'blue';
+      this.chars.red.root.visible = team === 'red';
+      this.attachBall();
+      this.applyPose();
+      return;
+    }
     this.shirtMat.color.set(TEAM_SHIRT[team]);
     this.capMat.color.set(TEAM_SHIRT[team]).multiplyScalar(0.8);
   }
 
+  private get char(): Character | null {
+    return this.chars ? this.chars[this.team] : null;
+  }
+
+  /** a bola "na mão" vai presa ao osso da mão direita do personagem da vez */
+  private attachBall(): void {
+    const c = this.char;
+    if (!c) return;
+    const hand = c.bone('hand.R');
+    hand.add(this.heldBall);
+    this.heldBall.position.set(0, 0.11, 0.035);
+  }
+
+  /** aplica a pose nos ossos (mesmas convenções do boneco: + = para frente) */
+  private applyBones(c: Character, p: Pose): void {
+    c.setHipsOffset(p.pelvis - 0.95);
+    c.rotate('spine', p.lean * 0.55);
+    c.rotate('chest', p.lean * 0.45);
+    c.rotate('neck', -p.lean * 0.3);
+    c.rotate('head', -p.lean * 0.35);
+    c.rotate('upper_arm.R', -(p.armR + p.lean), 0, -0.05);
+    c.rotate('forearm.R', -0.12);
+    c.rotate('upper_arm.L', -(p.armL + p.lean * 0.6), 0, 0.12);
+    c.rotate('forearm.L', -0.35);
+    c.rotate('thigh.L', -p.legL);
+    c.rotate('shin.L', p.kneeL);
+    c.rotate('foot.L', p.legL - p.kneeL);
+    c.rotate('thigh.R', -p.legR);
+    c.rotate('shin.R', p.kneeR);
+    c.rotate('foot.R', p.legR - p.kneeR);
+  }
+
   private applyPose(): void {
     const p = this.pose;
+    const c = this.char;
+    if (c) {
+      this.applyBones(c, p);
+      return;
+    }
     this.pelvis.position.y = p.pelvis;
     this.torso.rotation.x = -p.lean;
     this.armR.rotation.x = p.armR + p.lean;
@@ -315,15 +380,31 @@ export class Thrower {
     this.root.position.set(0, 0, 0);
     this.applyPose();
     this.root.updateMatrixWorld(true);
-    const sh = new THREE.Vector3();
-    this.armR.getWorldPosition(sh);
-    const cosA = clamp((sh.y - release.y) / this.armLen, -1, 1);
-    // pose.armR é o ângulo absoluto do braço em relação à vertical
-    this.relArm = Math.acos(cosA);
+    const hand = new THREE.Vector3();
+    if (this.char) {
+      // personagem: procura (bisseção) o ângulo do braço que põe a bola na altura da soltura
+      let lo = -0.2;
+      let hi = 1.8;
+      for (let i = 0; i < 18; i++) {
+        const mid = (lo + hi) / 2;
+        this.pose = this.releasePose(mid);
+        this.applyPose();
+        this.root.updateMatrixWorld(true);
+        this.heldBall.getWorldPosition(hand);
+        if (hand.y < release.y) lo = mid;
+        else hi = mid;
+      }
+      this.relArm = (lo + hi) / 2;
+    } else {
+      const sh = new THREE.Vector3();
+      this.armR.getWorldPosition(sh);
+      const cosA = clamp((sh.y - release.y) / this.armLen, -1, 1);
+      // pose.armR é o ângulo absoluto do braço em relação à vertical
+      this.relArm = Math.acos(cosA);
+    }
     this.pose = this.releasePose(this.relArm);
     this.applyPose();
     this.root.updateMatrixWorld(true);
-    const hand = new THREE.Vector3();
     this.heldBall.getWorldPosition(hand);
     this.base.set(release.x - hand.x, 0, release.z - hand.z);
     this.pose = saved;
@@ -415,6 +496,10 @@ export class Thrower {
     this.root.position.set(this.base.x, 0, this.base.z + this.run);
     this.opacity = damp(this.opacity, this.targetOpacity, 8, dt);
     const transparent = this.opacity < 0.99;
+    if (this.chars) {
+      this.chars.blue.setOpacity(this.opacity);
+      this.chars.red.setOpacity(this.opacity);
+    }
     for (const m of this.materials) {
       m.transparent = transparent;
       m.opacity = this.opacity;
