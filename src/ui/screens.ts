@@ -8,6 +8,7 @@ export type ScreenId = 'loading' | 'menu' | 'settings' | 'help' | 'pause' | 'con
 export interface ScreenCallbacks {
   play(): void;
   training(): void;
+  tutorial(): void;
   settingChanged(key: keyof Settings): void;
   resume(): void;
   restart(): void;
@@ -42,6 +43,7 @@ export class Screens {
       });
     on('btn-play', () => cb.play());
     on('btn-training', () => cb.training());
+    on('btn-tutorial', () => cb.tutorial());
     on('btn-settings', () => this.open('settings'));
     on('btn-help', () => this.open('help'));
     on('btn-resume', () => cb.resume());

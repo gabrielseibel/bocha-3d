@@ -1,3 +1,4 @@
+import { Tutorial, markTutorialSeen, tutorialSeen } from '../ui/tutorial';
 import * as THREE from 'three';
 import { BALL, BALLS_PER_TEAM, BOLIM, PHYS_DT, makeCourt, type CourtSpec } from '../config';
 import { AiClient } from '../ai/client';
@@ -98,6 +99,9 @@ export class Game {
   private qualityLevel: Quality;
   private menuWorld: World;
   private lastMode: Mode = 'cpu';
+  private tutorial: Tutorial;
+  /** a bola em jogo bateu numa parede lateral (para o tutorial da tabela) */
+  private activeHitWall = false;
 
   constructor(canvas: HTMLCanvasElement, settings: Settings, kit: CharacterKit | null = null) {
     // personagens do Blender (torcida e jogador); sem eles, bonecos simples
@@ -133,9 +137,15 @@ export class Game {
       training: (a) => this.trainingAction(a),
       click: () => this.sfx.click(),
     });
+    this.tutorial = new Tutorial({
+      exit: () => this.hud.toast('Treinamento livre: jogue à vontade', 'info'),
+      playCpu: () => this.startMatch('cpu'),
+      click: () => this.sfx.click(),
+    });
     this.screens = new Screens(settings, {
       play: () => this.startMatch(settings.mode),
       training: () => this.startMatch('training'),
+      tutorial: () => this.startTutorial(),
       settingChanged: (k) => this.onSetting(k),
       resume: () => this.resume(),
       restart: () => this.startMatch(this.lastMode),
@@ -257,6 +267,7 @@ export class Game {
   start(): void {
     this.screens.close('loading');
     this.goMenu();
+    this.offerTutorial();
     this.lastTime = performance.now();
     this.stage.renderer.setAnimationLoop((t) => this.frame(t));
     const coarse = window.matchMedia?.('(pointer: coarse)').matches;
@@ -293,6 +304,7 @@ export class Game {
 
   // ======================================================================= telas
   goMenu(): void {
+    this.tutorial?.stop();
     this.aiToken++;
     this.ai.cancelAll();
     this.aiAnim = null;
@@ -319,6 +331,8 @@ export class Game {
 
   startMatch(mode: Mode): void {
     this.sfx.unlock();
+    if (mode !== 'training') this.tutorial.stop();
+    document.getElementById('tutorial-offer')?.remove();
     this.lastMode = mode;
     const spec = this.currentSpec();
     if (!this.sameCourt(spec, this.court)) {
@@ -366,6 +380,34 @@ export class Game {
       const m = this.match;
       this.hud.toast(`${TEAM_NAME[m.roundStarter]} começa`, m.roundStarter);
     }
+  }
+
+  startTutorial(): void {
+    markTutorialSeen();
+    document.getElementById('tutorial-offer')?.remove();
+    this.startMatch('training');
+    this.tutorial.start();
+  }
+
+  /** primeira visita: oferece o tutorial em cima do menu */
+  private offerTutorial(): void {
+    if (tutorialSeen() || document.getElementById('tutorial-offer')) return;
+    const el = document.createElement('div');
+    el.id = 'tutorial-offer';
+    el.className = 'tutorial-card offer';
+    el.innerHTML =
+      '<h3>Primeira vez na cancha?</h3><p>Um tutorial rápido mostra como mirar, jogar o <b>ponto</b>, o <b>tiro</b> e usar a <b>tabela</b>.</p>' +
+      '<div class="tut-actions"><button class="btn primary" data-a="go">Fazer o tutorial</button><button class="btn" data-a="no">Agora não</button></div>';
+    el.querySelector('[data-a="go"]')!.addEventListener('click', () => {
+      this.sfx.click();
+      this.startTutorial();
+    });
+    el.querySelector('[data-a="no"]')!.addEventListener('click', () => {
+      this.sfx.click();
+      markTutorialSeen();
+      el.remove();
+    });
+    document.body.appendChild(el);
   }
 
   private pause(): void {
@@ -579,6 +621,8 @@ export class Game {
       if (this.match !== m || this.state === 'menu') return;
       const b = m.throw(aim);
       this.pendingThrow = false;
+      this.activeHitWall = false;
+      if (kind !== 'bolim') this.tutorial.notify({ type: 'thrown', style: styleOf(aim.arc) });
       this.shotCalled = false;
       this.sfx.whoosh(aim.power);
       this.flightT = 0;
@@ -602,6 +646,7 @@ export class Game {
     this.aim = x;
     this.thrower.placeFor(releasePoint(x, this.court), styleOf(x.arc));
     this.hud.setAim(x, this.court, maxPowerForArc(x.arc, this.court), this.kind === 'bolim');
+    this.tutorial.notify({ type: 'aim', yaw: x.yaw, power: x.power, arc: x.arc });
   }
 
   private nudge(field: AimField, dir: 1 | -1, fine: boolean): void {
@@ -638,6 +683,7 @@ export class Game {
   private setStyle(style: ShotStyle): void {
     if (!this.canHumanAim() || styleOf(this.aim.arc) === style) return;
     this.setAim(withStyle(this.aim, style));
+    this.tutorial.notify({ type: 'style', style });
     this.hud.toast(style === 'ponto' ? 'Ponto: agachado, bola rente ao chão' : 'Tiro: bola alta e forte para bater', 'info', 1300);
   }
 
@@ -655,6 +701,7 @@ export class Game {
     if (this.state !== 'play') return;
     const order: UserView[] = ['aim', 'bolim', 'overview'];
     this.userView = order[(order.indexOf(this.userView) + 1) % order.length];
+    this.tutorial.notify({ type: 'camera' });
     if (!this.match?.inFlight && this.rig.mode !== 'settle') this.rig.setMode(this.userView);
     this.hud.toast(VIEW_NAME[this.userView], 'info', 1100);
   }
@@ -662,6 +709,7 @@ export class Game {
   private toggleDistances(): void {
     this.showDistances = !this.showDistances;
     this.hud.setDistancesPressed(this.showDistances);
+    this.tutorial.notify({ type: 'distances' });
     if (this.showDistances && this.userView === 'aim' && this.match && !this.match.inFlight) {
       this.userView = 'bolim';
       this.rig.setMode('bolim');
@@ -920,6 +968,7 @@ export class Game {
           break;
         }
         case 'wall':
+          if (m && e.id === m.activeId && (e.wall === 'left' || e.wall === 'right')) this.activeHitWall = true;
           this.sfx.wall(e.speed);
           if (e.speed > 1.2) this.dust.burst(e.x, e.z, e.speed * 0.2, 0, 0, Math.max(0.02, e.y - 0.04));
           break;
@@ -958,6 +1007,7 @@ export class Game {
         }
       }
       this.labelsForced = true;
+      this.tutorial.notify({ type: 'settled', dist: last, wall: this.activeHitWall });
       this.scheduleTurn(1.2);
       return;
     }
@@ -1065,6 +1115,7 @@ export class Game {
       setAim: (a: Partial<Aim>) => this.setAim({ ...this.aim, ...a }),
       throw: () => this.humanThrow(),
       start: (mode: Mode) => this.startMatch(mode),
+      tutorial: () => this.startTutorial(),
       continueRound: () => this.roundContinue(),
       menu: () => this.goMenu(),
     };
