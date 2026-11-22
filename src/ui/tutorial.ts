@@ -93,6 +93,7 @@ export class Tutorial {
   private el: HTMLElement;
   private idx = 0;
   private active = false;
+  private busy = false;
   private state: StepState = { yaw0: null, power0: null, wallHit: false };
 
   constructor(private host: TutorialHost) {
@@ -118,7 +119,7 @@ export class Tutorial {
   }
 
   notify(e: TutorialEvent): void {
-    if (!this.active) return;
+    if (!this.active || this.busy) return;
     if (e.type === 'aim') {
       if (this.state.yaw0 === null) this.state.yaw0 = e.yaw;
       if (this.state.power0 === null) this.state.power0 = e.power;
@@ -128,8 +129,11 @@ export class Tutorial {
   }
 
   private advance(done: boolean): void {
+    if (this.busy) return;
+    this.busy = true;
     if (done) this.el.classList.add('done');
     const next = () => {
+      this.busy = false;
       this.el.classList.remove('done');
       this.idx++;
       this.state = { yaw0: null, power0: null, wallHit: false };
